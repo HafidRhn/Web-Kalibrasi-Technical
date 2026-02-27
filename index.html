@@ -54,7 +54,11 @@
         <tr>
           <td class="border border-black px-4 py-2 font-bold bg-gray-100">Merk / Type / SN</td>
           <td class="border border-black text-center bg-gray-50">:</td>
-          <td class="border border-black px-4 py-2">AND / EK-1200i / P1850111</td>
+          <td class="border border-black px-4 py-2">
+            <input type="text" id="merk-type-sn"
+              class="w-full border-0 focus:outline-none focus:ring-0 p-0 bg-transparent"
+              placeholder="AND / EK-1200i / P1850111" />
+          </td>
         </tr>
         <tr>
           <td class="border border-black px-4 py-2 font-bold bg-gray-100">Kapasitas / Daya Baca / e</td>
@@ -98,25 +102,98 @@
           </td>
         </tr>
         <script>
-          const identitasOptions = [
-            "QC/O/TMB/2013/018",
-            "QC/O/TMB/2024/029",
-            "QC/O/TMB/2025/030",
-            // ... data lainnya
+          const balanceDatabase = [
+            // DATABASE GRAM (g)
+            { id: "QC/O/TMB/2013/018", merk: "AND", type: "EK-1200i", sn: "P1850111", lokasi: "R. Timbang QC Obat", d: 0.1, e: 1, cap: 1200, unit: "g" },
+            { id: "QC/O/TMB/2015/003", merk: "AND", type: "GF-3000", sn: "T0348525", lokasi: "R. IPC Produksi Gedung A", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "QC/O/TMB/2015/004", merk: "AND", type: "GF-300", sn: "T0352366", lokasi: "R. Sampling Gudang Gedung B", d: 0.001, e: 0.01, cap: 310.084, unit: "g" },
+            { id: "RND/O/TMB/2019/006", merk: "AND", type: "GF-3000", sn: "T0381244", lokasi: "Laboratorium R&D Pharma", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "PRD/O/TMB/2013/003", merk: "AND", type: "GF-12K", sn: "15005778", lokasi: "R. Timbang Produksi Obat Gedung A", d: 0.1, e: 1, cap: 12008.4, unit: "g" },
+            { id: "PRD/O/TMB/2013/043", merk: "AND", type: "EK-3000i", sn: "P1867283", lokasi: "R. Kemas Primer 1 Gedung A", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/O/TMB/2013/042", merk: "AND", type: "EK-3000i", sn: "P1895407", lokasi: "R. Kemas Sekunder Gedung A", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/O/TMB/2025/001", merk: "AND", type: "EK-3000i", sn: "P1856225", lokasi: "R. Kemas Primer 4 Gedung A", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/O/TMB/2025/002", merk: "AND", type: "EK-3000i", sn: "NA", lokasi: "R. Kemas Sekunder Gedung A", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/O/TMB/2025/004", merk: "AND", type: "EK-3000i", sn: "NA", lokasi: "R. Kemas Primer 3 Gedung A", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "WH/O/TMB/2013/002", merk: "AND", type: "GF-2000", sn: "T0330154", lokasi: "R. Timbang Warehouse Obat", d: 0.01, e: 0.1, cap: 2100.84, unit: "g" },
+            { id: "WH/O/TMB/2013/003", merk: "AND", type: "EK-12Ki", sn: "P1868732", lokasi: "R. Timbang Warehouse Obat", d: 1, e: 10, cap: 12000, unit: "g" },
+            { id: "QC/K/TMB/2013/012", merk: "AND", type: "EK-1200i", sn: "6A4401866", lokasi: "R. Preparasi Mikrobiologi/QC Kosmetik (Gedung F2)", d: 0.1, e: 1, cap: 1200, unit: "g" },
+            { id: "QC/K/TMB/2015/002", merk: "AND", type: "GF-3000", sn: "T0348734", lokasi: "R. IPC Primer F Lantai 1", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "QC/K/TMB/2013/031", merk: "AND", type: "EK-1200i", sn: "6A4401864", lokasi: "R. QC Packaging & Admin", d: 0.1, e: 1, cap: 1200, unit: "g" },
+            { id: "QC/K/TMB/2015/001", merk: "AND", type: "GF-3000", sn: "T0348727", lokasi: "R. IPC Primer G Lantai 1", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "QC/K/TMB/2018/002", merk: "AND", type: "GF-3000", sn: "T0374526", lokasi: "R. Lab Fisika Kimia", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "WH/K/TMB/2013/003", merk: "AND", type: "EK-12Ki", sn: "P1645800", lokasi: "R. Timbang 3 Gedung F Dasar", d: 1, e: 10, cap: 12000, unit: "g" },
+            { id: "WH/K/TMB/2013/002", merk: "AND", type: "GF-10K", sn: "15005382", lokasi: "R. Timbang 1 Gedung F Dasar", d: 0.01, e: 0.1, cap: 10100.84, unit: "g" },
+            { id: "WH/K/TMB/2013/007", merk: "AND", type: "GF-10K", sn: "15005158", lokasi: "R. Timbang 2 Gedung F Dasar", d: 0.01, e: 0.1, cap: 10100.84, unit: "g" },
+            { id: "WH/K/TMB/2013/026", merk: "AND", type: "GF-3000", sn: "T0337128", lokasi: "R. Timbang 2 Gedung F Dasar", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "WH/K/TMB/2013/025", merk: "AND", type: "GF-3000", sn: "T 0339472", lokasi: "R. Sampling dan Timbang Gedung F Dasar", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "WH/K/TMB/2013/024", merk: "AND", type: "GF-300", sn: "T0324252", lokasi: "R. Timbang Gedung G1", d: 0.001, e: 0.01, cap: 310.084, unit: "g" },
+            { id: "WH/K/TMB/2013/027", merk: "AND", type: "GF-10K", sn: "15005698", lokasi: "R. Timbang 1 Gedung F Dasar", d: 0.01, e: 0.1, cap: 10100.84, unit: "g" },
+            { id: "RND/K/TMB/2013/002", merk: "AND", type: "GF-3000", sn: "14679946", lokasi: "Laboratorium R&D Kosmetik", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "RND/K/TMB/2013/003", merk: "AND", type: "GF-3000", sn: "14659040", lokasi: "Laboratorium R&D Kosmetik", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "RND/K/TMB/2013/004", merk: "AND", type: "GF-3000", sn: "T0333211", lokasi: "Laboratorium R&D Kosmetik", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "RND/K/TMB/2013/005", merk: "AND", type: "GF-3000", sn: "T0333228", lokasi: "Laboratorium R&D Kosmetik", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "RND/K/TMB/2022/004", merk: "AND", type: "GF-3000", sn: "T0369464", lokasi: "Laboratorium R&D Kosmetik", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "PRD/K/TMB/2013/048", merk: "AND", type: "EK-3000i", sn: "6A4401885", lokasi: "R. Pengemasan Primer Serbuk Kompak Gedung F Lantai 1", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/K/TMB/2013/045", merk: "AND", type: "EK-1200i", sn: "6A4404884", lokasi: "R. Pengemasan Primer Serbuk Tabur (Gedung F Lantai 1)", d: 0.1, e: 1, cap: 1200, unit: "g" },
+            { id: "PRD/K/TMB/2013/017", merk: "AND", type: "EK-12Ki", sn: "P1858534", lokasi: "R. Pemasakan, Mixing, Cetak dan Pengemasan Primer Padat (Sabun) (Gedung F Lantai 1)", d: 1, e: 10, cap: 12000, unit: "g" },
+            { id: "PRD/K/TMB/2013/046", merk: "AND", type: "EK-3000i", sn: "P1895408", lokasi: "R. Pengemasan Primer Serbuk Tabur Gedung F Lantai 1", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/K/TMB/2013/144", merk: "NAGATA", type: "LCS-3000", sn: "LCS-3000", lokasi: "R. Kemas Primer Gedung F Lantai 1", d: 1, e: 10, cap: 3000, unit: "g" },
+            { id: "PRD/K/TMB/2018/024", merk: "AND", type: "GF-3000", sn: "T0374110", lokasi: "Gedung E Lantai 1", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "PRD/K/TMB/2018/018", merk: "AND", type: "GF-10K", sn: "15008568", lokasi: "R. Timbang Gedung G Lantai 1", d: 0.01, e: 0.1, cap: 10100.84, unit: "g" },
+            { id: "PRD/K/TMB/2013/117", merk: "AND", type: "Timbangan EK-3000i", sn: "P1847530", lokasi: "Gedung E Lantai 1", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/K/TMB/2013/116", merk: "AND", type: "EK-3000i", sn: "NA", lokasi: "R. Kemas Primer Krim, Pasta, Gel, Cair & Cairan Kental (Gedung G Lantai 1 Line 12)", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/K/TMB/2013/145", merk: "AND", type: "Timbangan EK-3000i", sn: "P1897902", lokasi: "R. Kemas Primer", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/K/TMB/2013/049", merk: "AND", type: "EK-3000i", sn: "P1897904", lokasi: "Gedung E Lantai 1", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/K/TMB/2018/025", merk: "AND", type: "GF-3000", sn: "T0374128", lokasi: "R. Kemas Primer Krim, Pasta, Gel, Cair & Cairan Kental (Gedung G Lantai 1)", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "PRD/K/TMB/2013/004", merk: "AND", type: "GF-2000", sn: "T0334863", lokasi: "R. Mixing, Kemas Primer, Produk Ruahan & Produk Antara Krim, Pasta, Gel, Cair & Cairan Kental (Gedung G Lantai 1)", d: 0.01, e: 0.1, cap: 2100.84, unit: "g" },
+            { id: "PRD/K/TMB/2013/051", merk: "AND", type: "EK-3000i", sn: "P1890558", lokasi: "R. Kemas Primer Krim, Pasta, Gel, Cair & Cairan Kental (Gedung G Lantai 1 Line 11)", d: 0.1, e: 1, cap: 3000, unit: "g" },
+            { id: "PRD/K/TMB/2013/018", merk: "AND", type: "GF-3000", sn: "T0374093", lokasi: "R. Kemas Primer Krim, Pasta, Gel, Cair & Cairan Kental (Gedung G Lantai 1 Line 8)", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+            { id: "PRD/K/TMB/2018/017", merk: "AND", type: "GF-3000", sn: "T0374108", lokasi: "R. WIP Penyimpanan Produk Ruahan Gedung G Lantai 2", d: 0.01, e: 0.1, cap: 3100.84, unit: "g" },
+
+            // DATABASE KILOGRAM (kg)
+            { id: "PRD/O/TMB/2013/001", merk: "AND", type: "FG-150 KAL", sn: "Q1904394", lokasi: "R. Timbang Produksi Obat Gedung A", d: 0.05, e: 0.1, cap: 150, unit: "kg" },
+            { id: "PRD/O/TMB/2013/002", merk: "AND", type: "FG-30 KAM", sn: "Q1908612", lokasi: "R. Timbang Produksi Obat Gedung A", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "PRD/O/TMB/2017/008", merk: "AND", type: "FG-30 KAM", sn: "Q1914610", lokasi: "R. Kemas Sekunder", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "WH/K/TMB/2013/004", merk: "AND", type: "FG-30 KAM", sn: "Q1908219", lokasi: "R. Timbang 1 Gedung F Dasar", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "WH/K/TMB/2013/005", merk: "AND", type: "HW-100 KGL", sn: "M7709134", lokasi: "R. Timbang 3 Gedung F Dasar", d: 0.01, e: 0.1, cap: 100, unit: "kg" },
+            { id: "WH/K/TMB/2013/020", merk: "AND", type: "HC-6 Ki", sn: "Q7808062", lokasi: "R. Timbang Gedung G Lantai 1", d: 0.001, e: 0.01, cap: 6, unit: "kg" },
+            { id: "WH/K/TMB/2013/022", merk: "AND", type: "FG-30 KAM", sn: "Q1911783", lokasi: "Gudang Bahan Kemas (Gedung E Basement)", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "WH/K/TMB/2013/023", merk: "AND", type: "300 Kg", sn: "AD-4328", lokasi: "Area Karantina RM (Gedung F Lantai Dasar)", d: 0.02, e: 0.1, cap: 300, unit: "kg" },
+            { id: "WH/K/TMB/2023/008", merk: "AND", type: "HW-100 KGL", sn: "M 7712941", lokasi: "Gudang FG Suhu Kamar/Gedung G Lantai Dasar", d: 0.01, e: 0.1, cap: 100, unit: "kg" },
+            { id: "WH/K/TMB/2023/010", merk: "AND", type: "FG-30 KAM", sn: "Q1915911", lokasi: "R. Timbang 3 Gedung F Dasar", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "WH/K/TMB/2023/011", merk: "AND", type: "FG-30 KAM", sn: "Q1908616", lokasi: "Gudang FG Suhu Kamar/Gedung G Lantai Dasar", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "PRD/K/TMB/2013/001", merk: "Gewinn", type: "Gewinn 300 Kg", sn: "XK3190-C602", lokasi: "R. Mixing Krim, Pasta, Gel 2 (Gedung F Lantai 2)", d: 0.05, e: 0.1, cap: 300, unit: "kg" },
+            { id: "PRD/K/TMB/2013/002", merk: "AND", type: "HW-100 KGL", sn: "M73009642", lokasi: "R. Staging Hasil Timbang Gedung F Lantai 2", d: 0.01, e: 0.1, cap: 100, unit: "kg" },
+            { id: "PRD/K/TMB/2013/003", merk: "AND", type: "FG-30 KAM", sn: "Q1908210", lokasi: "R. Staging Hasil Timbang Gedung F Lantai 2", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "PRD/K/TMB/2013/005", merk: "AND", type: "GF-12K", sn: "15005806", lokasi: "R. Mixing, Kemas Primer, Produk Ruahan & Produk Antara Krim, Pasta, Gel, Cair & Cairan Kental (Gedung G Lantai 1)", d: 0.1, e: 1, cap: 12008.4, unit: "kg" },
+            { id: "PRD/K/TMB/2013/044", merk: "AND", type: "FG-30 KBM", sn: "Q2001377", lokasi: "R. Pengemasan Primer Serbuk Tabur Gedung F Lantai 1", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "PRD/K/TMB/2013/050", merk: "AND", type: "FG-150 KAL", sn: "Q1909355", lokasi: "R. Pengemasan Primer Serbuk Tabur Gedung F Lantai 1", d: 0.02, e: 0.1, cap: 150, unit: "kg" },
+            { id: "PRD/K/TMB/2013/097", merk: "AND", type: "FG-150 KAL", sn: "Q1908199", lokasi: "R. Timbang Gedung G Lantai 1", d: 0.02, e: 0.1, cap: 150, unit: "kg" },
+            { id: "PRD/K/TMB/2013/150", merk: "AND", type: "HW 10 KGL", sn: "M7709242", lokasi: "R. Kemas Sekunder Gedung F Lantai 1", d: 0.001, e: 0.01, cap: 10, unit: "kg" },
+            { id: "PRD/K/TMB/2015/001", merk: "AND", type: "FG-30 KAM", sn: "Q1912840", lokasi: "R. Timbang Gedung G Lantai 1", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "PRD/K/TMB/2017/003", merk: "AND", type: "300 Kg", sn: "AD-4328", lokasi: "R. Timbang Gedung G Lantai 1", d: 0.02, e: 0.1, cap: 300, unit: "kg" },
+            { id: "PRD/K/TMB/2017/028", merk: "AND", type: "FG-150 KAL", sn: "Q1913993", lokasi: "R. Mixing, Kemas Primer, Produk Ruahan & Produk Antara Krim, Pasta, Gel, Cair & Cairan Kental (Gedung G Lantai 1)", d: 0.02, e: 0.1, cap: 150, unit: "kg" },
+            { id: "PRD/K/TMB/2018/019", merk: "AND", type: "FG-30 KAM", sn: "Q194603", lokasi: "Gedung E Lantai 1", d: 0.005, e: 0.01, cap: 30, unit: "kg" },
+            { id: "PRD/K/TMB/2018/020", merk: "AND", type: "FG-150 KAL", sn: "Q194567", lokasi: "R. WIP Produksi Kosmetik Gedung G Lantai 2", d: 0.02, e: 0.1, cap: 150, unit: "kg" },
+            { id: "PRD/K/TMB/2018/021", merk: "AND", type: "300 Kg", sn: "AD-4328EX", lokasi: "R. Staging Hasil Timbang Gedung F Lantai 2", d: 0.02, e: 0.1, cap: 300, unit: "kg" },
+            { id: "PRD/K/TMB/2018/022", merk: "AND", type: "FG-30 KAM", sn: "Q1914593", lokasi: "R. Kemas Sekunder Krim, Pasta, Gel, Cair & Cairan Kental - Area Timbang (Gedung G Lantai 1)", d: 0.005, e: 0.01, cap: 30, unit: "kg" }
           ];
 
           function showSuggestions(value) {
             const box = document.getElementById("suggestions-box");
-            const input = document.getElementById("no-identitas");
-
+            if (value.length === 0) {
+              resetBalanceFields();
+              box.classList.add("hidden");
+              return;
+            }
             if (value.length < 2) {
               box.classList.add("hidden");
               return;
             }
 
-            const filtered = identitasOptions
-              .filter((opt) => opt.toLowerCase().includes(value.toLowerCase()))
-              .slice(0, 5); // Hanya tampilkan 5 suggestion maksimal
+            const filtered = balanceDatabase
+              .filter((item) => item.id.toLowerCase().includes(value.toLowerCase()))
+              .slice(0, 10);
 
             if (filtered.length === 0) {
               box.classList.add("hidden");
@@ -125,21 +202,95 @@
 
             box.innerHTML = filtered
               .map(
-                (opt) => `
-      <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-           onclick="selectSuggestion('${opt}')">
-        ${opt}
-      </div>
-    `
+                (item) => `
+                <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                     onclick="selectSuggestion('${item.id}')">
+                  <div class="font-bold text-xs">${item.id}</div>
+                  <div class="text-[10px] text-gray-500">${item.merk} ${item.type} (${item.unit}) - ${item.lokasi}</div>
+                </div>
+              `
               )
               .join("");
 
             box.classList.remove("hidden");
           }
 
-          function selectSuggestion(value) {
-            document.getElementById("no-identitas").value = value;
+          function selectSuggestion(id) {
+            const item = balanceDatabase.find(b => b.id === id);
+            if (!item) return;
+
+            document.getElementById("no-identitas").value = item.id;
+            document.getElementById("merk-type-sn").value = `${item.merk} / ${item.type} / ${item.sn}`;
+            document.getElementById("lokasi-alat").value = item.lokasi;
+
+            // Update Unit first to ensure correct conversion
+            const unitSelector = document.getElementById('unit-selector');
+            if (unitSelector && item.unit) {
+              unitSelector.value = item.unit;
+              g_currentUnit = item.unit;
+              updateUnitLabels();
+            }
+
+            // Update Specs
+            const specsCell = document.getElementById('specs-cell');
+            if (specsCell) {
+              let capG = item.cap;
+              let dG = item.d;
+              let eG = item.e;
+              
+              if (item.unit === "kg") {
+                capG = item.cap * 1000;
+                dG = item.d * 1000;
+                eG = item.e * 1000;
+              }
+
+              specsCell.dataset.cap = capG;
+              specsCell.dataset.d = dG;
+              specsCell.dataset.e = eG;
+
+              // Don't call saveSpecs() as it reads from inputs which might be stale
+              // Instead update display and global precision directly
+              updateGlobalPrecision();
+              updateSpecsDisplay();
+
+              // Still trigger calculations
+              if (typeof calculateRepeatability === 'function') calculateRepeatability();
+              if (typeof calculateUncertainty === 'function') calculateUncertainty();
+
+              // Sync to localStorage
+              localStorage.setItem('calibrationSpecs', JSON.stringify({
+                cap: capG,
+                d: dG,
+                e: eG
+              }));
+            }
+
             document.getElementById("suggestions-box").classList.add("hidden");
+          }
+
+          function resetBalanceFields() {
+            document.getElementById("merk-type-sn").value = "";
+            document.getElementById("lokasi-alat").value = "";
+            
+            const specsCell = document.getElementById('specs-cell');
+            if (specsCell) {
+              specsCell.dataset.cap = "0";
+              specsCell.dataset.d = "0";
+              specsCell.dataset.e = "0";
+              
+              const inputCap = document.getElementById('input-cap');
+              const inputD = document.getElementById('input-d');
+              const inputE = document.getElementById('input-e');
+              
+              if (inputCap) inputCap.value = "";
+              if (inputD) inputD.value = "";
+              if (inputE) inputE.value = "";
+              
+              updateSpecsDisplay();
+              updateGlobalPrecision();
+            }
+            
+            localStorage.removeItem('calibrationSpecs');
           }
 
           // Tutup suggestion box ketika klik di luar
@@ -157,7 +308,11 @@
         <tr>
           <td class="border border-black px-4 py-2 font-bold bg-gray-100">Lokasi</td>
           <td class="border border-black text-center bg-gray-50">:</td>
-          <td class="border border-black px-4 py-2">R. Timbang / QC Obat (Gedung A)</td>
+          <td class="border border-black px-4 py-2">
+            <input type="text" id="lokasi-alat"
+              class="w-full border-0 focus:outline-none focus:ring-0 p-0 bg-transparent"
+              placeholder="R. Timbang / QC Obat (Gedung A)" />
+          </td>
         </tr>
         <tr>
           <td class="border border-black px-4 py-2 font-bold bg-gray-100">Tanggal Kalibrasi</td>
@@ -3987,10 +4142,10 @@
 
     const identitasData = [
       ["No. Sertifikat Kalibrasi", document.getElementById("cert-no")?.value || ""],
-      ["Merk / Type / SN", "AND / EK-1200i / P1850111"],
+      ["Merk / Type / SN", document.getElementById("merk-type-sn")?.value || ""],
       ["Kapasitas / Daya Baca / e", document.getElementById("specs-cell")?.innerText || ""],
       ["No Identitas", document.getElementById("no-identitas")?.value || ""],
-      ["Lokasi", "R. Timbang / QC Obat (Gedung A)"],
+      ["Lokasi", document.getElementById("lokasi-alat")?.value || ""],
       ["Tanggal Kalibrasi", document.getElementById("cal-date")?.value || ""],
       ["Interval Kalibrasi", "12 Bulan"],
       ["Suhu / RH / Pa", `${document.getElementById("env-suhu")?.value || ""} °C / ${document.getElementById("env-rh")?.value || ""} % / ${document.getElementById("env-pa")?.value || ""} hPa`]
