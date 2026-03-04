@@ -25,8 +25,9 @@
           class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded shadow transition-all active:scale-95">Tabel
           MPE</button>
       </div>
-      <button onclick="exportToPDF()"
+      <button onclick="confirmExportToPDF()"
         class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-8 rounded shadow transition-all active:scale-95 flex items-center gap-2">
+        <i class="fas fa-file-pdf"></i>
         <span>Cetak ke PDF</span>
       </button>
     </div>
@@ -237,7 +238,7 @@
               let capG = item.cap;
               let dG = item.d;
               let eG = item.e;
-              
+
               if (item.unit === "kg") {
                 capG = item.cap * 1000;
                 dG = item.d * 1000;
@@ -271,25 +272,25 @@
           function resetBalanceFields() {
             document.getElementById("merk-type-sn").value = "";
             document.getElementById("lokasi-alat").value = "";
-            
+
             const specsCell = document.getElementById('specs-cell');
             if (specsCell) {
               specsCell.dataset.cap = "0";
               specsCell.dataset.d = "0";
               specsCell.dataset.e = "0";
-              
+
               const inputCap = document.getElementById('input-cap');
               const inputD = document.getElementById('input-d');
               const inputE = document.getElementById('input-e');
-              
+
               if (inputCap) inputCap.value = "";
               if (inputD) inputD.value = "";
               if (inputE) inputE.value = "";
-              
+
               updateSpecsDisplay();
               updateGlobalPrecision();
             }
-            
+
             localStorage.removeItem('calibrationSpecs');
           }
 
@@ -848,6 +849,211 @@
           if (typeof calculateUncertainty === 'function') calculateUncertainty();
         }
 
+        function saveAllCalibrationData() {
+          const data = {
+            // Meta & Header
+            meta: {
+              certNo: document.getElementById('cert-no')?.value || '',
+              noIdentitas: document.getElementById('no-identitas')?.value || '',
+              merk: document.getElementById('bal-merk')?.value || '',
+              sn: document.getElementById('bal-sn')?.value || '',
+              loc: document.getElementById('bal-loc')?.value || '',
+              inputCap: document.getElementById('input-cap')?.value || '',
+              inputD: document.getElementById('input-d')?.value || '',
+              inputE: document.getElementById('input-e')?.value || '',
+              calDate: document.getElementById('cal-date')?.value || '',
+              nextCalDate: document.getElementById('next-cal-date')?.value || '',
+              formNo: document.getElementById('form-no')?.value || '',
+              revNo: document.getElementById('rev-no')?.value || '',
+              effDate: document.getElementById('eff-date')?.value || '',
+              suhu: document.getElementById('env-suhu')?.value || '',
+              rh: document.getElementById('env-rh')?.value || '',
+              pa: document.getElementById('env-pa')?.value || ''
+            },
+            // Pre & Post Adjustment
+            preAdj: {
+              z1: document.querySelector('.pre-adj-z1')?.value || '',
+              z2: document.querySelector('.pre-adj-z2')?.value || '',
+              r1: document.querySelector('.pre-adj-r1')?.value || '',
+              r2: document.querySelector('.pre-adj-r2')?.value || ''
+            },
+            postAdj: {
+              z1: document.querySelector('.post-adj-z1')?.value || '',
+              z2: document.querySelector('.post-adj-z2')?.value || '',
+              r1: document.querySelector('.post-adj-r1')?.value || '',
+              r2: document.querySelector('.post-adj-r2')?.value || ''
+            },
+            // Repeatability
+            repeatability: {
+              nom50: document.getElementById('nominal-50')?.value || '',
+              nom100: document.getElementById('nominal-100')?.value || '',
+              inputs: []
+            },
+            // Linearity (The most complex one)
+            linearity: {
+              nominals: [], // data-base-weight from spans
+              mcs: [],      // data-base-weight from cells
+              certUs: [],   // dataset.certU
+              certKelas: [], // dataset.certKelas
+              inputs: []     // all editable inputs in table
+            },
+            // Eccentricity
+            eccentricity: {
+              nominal: document.getElementById('ecc-nominal')?.value || '',
+              nominalBase: document.getElementById('ecc-nominal')?.dataset.baseWeight || '',
+              readings: []
+            },
+            // Hysterisis
+            hysterisis: {
+              nominal: document.getElementById('input-nominal-hys')?.value || '',
+              nominalBase: document.getElementById('input-nominal-hys')?.dataset.baseWeight || '',
+              p: [],
+              q: []
+            }
+          };
+
+          // Collect Repeatability Inputs (Flat)
+          const repInputs = document.querySelectorAll('#repeatability-table input:not([readonly])');
+          repInputs.forEach(inp => data.repeatability.inputs.push(inp.value));
+
+          // Collect Linearity Data
+          for (let i = 1; i <= 10; i++) {
+            const row = document.getElementById(`linearity-row-${i}`);
+            if (row) {
+              data.linearity.nominals.push(row.cells[1].querySelector('span.no-decimal')?.dataset.baseWeight || '');
+              data.linearity.mcs.push(row.cells[2].dataset.baseWeight || '');
+              data.linearity.certUs.push(row.dataset.certU || '');
+              data.linearity.certKelas.push(row.dataset.certKelas || '');
+            }
+          }
+          const linInputs = document.querySelectorAll('#linearity-table input:not([readonly])');
+          linInputs.forEach(inp => data.linearity.inputs.push(inp.value));
+
+          // Collect Eccentricity Inputs
+          const eccInputs = document.querySelectorAll('.ecc-input');
+          eccInputs.forEach(inp => data.eccentricity.readings.push(inp.value));
+
+          // Collect Hysterisis Inputs
+          document.querySelectorAll('.hys-p').forEach(inp => data.hysterisis.p.push(inp.value));
+          document.querySelectorAll('.hys-q').forEach(inp => data.hysterisis.q.push(inp.value));
+
+          localStorage.setItem('calibrationFormData', JSON.stringify(data));
+        }
+
+        function loadAllCalibrationData() {
+          const saved = localStorage.getItem('calibrationFormData');
+          if (!saved) return;
+
+          try {
+            const data = JSON.parse(saved);
+
+            // Restore Meta & Header
+            const m = data.meta;
+            if (m) {
+              if (m.certNo) document.getElementById('cert-no').value = m.certNo;
+              if (m.noIdentitas) document.getElementById('no-identitas').value = m.noIdentitas;
+              if (m.merk) document.getElementById('bal-merk').value = m.merk;
+              if (m.sn) document.getElementById('bal-sn').value = m.sn;
+              if (m.loc) document.getElementById('bal-loc').value = m.loc;
+              if (m.inputCap) document.getElementById('input-cap').value = m.inputCap;
+              if (m.inputD) document.getElementById('input-d').value = m.inputD;
+              if (m.inputE) document.getElementById('input-e').value = m.inputE;
+              if (m.calDate) document.getElementById('cal-date').value = m.calDate;
+              if (m.nextCalDate) document.getElementById('next-cal-date').value = m.nextCalDate;
+              if (m.formNo) document.getElementById('form-no').value = m.formNo;
+              if (m.revNo) document.getElementById('rev-no').value = m.revNo;
+              if (m.effDate) document.getElementById('eff-date').value = m.effDate;
+              if (m.suhu) document.getElementById('env-suhu').value = m.suhu;
+              if (m.rh) document.getElementById('env-rh').value = m.rh;
+              if (m.pa) document.getElementById('env-pa').value = m.pa;
+            }
+
+            // Restore Pre & Post adjustment
+            if (data.preAdj) {
+              document.querySelector('.pre-adj-z1').value = data.preAdj.z1 || '';
+              document.querySelector('.pre-adj-z2').value = data.preAdj.z2 || '';
+              document.querySelector('.pre-adj-r1').value = data.preAdj.r1 || '';
+              document.querySelector('.pre-adj-r2').value = data.preAdj.r2 || '';
+            }
+            if (data.postAdj) {
+              document.querySelector('.post-adj-z1').value = data.postAdj.z1 || '';
+              document.querySelector('.post-adj-z2').value = data.postAdj.z2 || '';
+              document.querySelector('.post-adj-r1').value = data.postAdj.r1 || '';
+              document.querySelector('.post-adj-r2').value = data.postAdj.r2 || '';
+            }
+
+            // Restore Repeatability
+            if (data.repeatability) {
+              if (data.repeatability.nom50) document.getElementById('nominal-50').value = data.repeatability.nom50;
+              if (data.repeatability.nom100) document.getElementById('nominal-100').value = data.repeatability.nom100;
+              const repInputs = document.querySelectorAll('#repeatability-table input:not([readonly])');
+              data.repeatability.inputs?.forEach((val, i) => { if (repInputs[i]) repInputs[i].value = val; });
+            }
+
+            // Restore Linearity (Attributes + Inputs)
+            if (data.linearity) {
+              for (let i = 1; i <= 10; i++) {
+                const row = document.getElementById(`linearity-row-${i}`);
+                if (row) {
+                  const n = data.linearity.nominals[i - 1];
+                  const mc = data.linearity.mcs[i - 1];
+                  const u = data.linearity.certUs[i - 1];
+                  const k = data.linearity.certKelas[i - 1];
+
+                  if (n) {
+                    const span = row.cells[1].querySelector('span.no-decimal');
+                    if (span) span.dataset.baseWeight = n;
+                  }
+                  if (mc) row.cells[2].dataset.baseWeight = mc;
+                  if (u) row.dataset.certU = u;
+                  if (k) row.dataset.certKelas = k;
+                }
+              }
+              const linInputs = document.querySelectorAll('#linearity-table input:not([readonly])');
+              data.linearity.inputs?.forEach((val, i) => { if (linInputs[i]) linInputs[i].value = val; });
+            }
+
+            // Restore Eccentricity
+            if (data.eccentricity) {
+              const eccNom = document.getElementById('ecc-nominal');
+              if (eccNom) {
+                eccNom.value = data.eccentricity.nominal || '';
+                eccNom.dataset.baseWeight = data.eccentricity.nominalBase || '';
+              }
+              const eccInputs = document.querySelectorAll('.ecc-input');
+              data.eccentricity.readings?.forEach((val, i) => { if (eccInputs[i]) eccInputs[i].value = val; });
+            }
+
+            // Restore Hysterisis
+            if (data.hysterisis) {
+              const hysNom = document.getElementById('input-nominal-hys');
+              if (hysNom) {
+                hysNom.value = data.hysterisis.nominal || '';
+                hysNom.dataset.baseWeight = data.hysterisis.nominalBase || '';
+              }
+              const pInputs = document.querySelectorAll('.hys-p');
+              const qInputs = document.querySelectorAll('.hys-q');
+              if (data.hysterisis.p) data.hysterisis.p.forEach((val, i) => { if (pInputs[i]) pInputs[i].value = val; });
+              if (data.hysterisis.q) data.hysterisis.q.forEach((val, i) => { if (qInputs[i]) qInputs[i].value = val; });
+            }
+
+            // Finalize State
+            refreshStaticWeights();
+            if (typeof calculateRepeatability === 'function') calculateRepeatability();
+            if (typeof calculatePreAdjustment === 'function') calculatePreAdjustment();
+            if (typeof calculatePostAdjustment === 'function') calculatePostAdjustment();
+            if (typeof calculateEccentricity === 'function') calculateEccentricity();
+            if (typeof calculateHysterisis === 'function') calculateHysterisis();
+
+            // Trigger Linearity/Uncertainty cascade
+            const linInput = document.querySelector('#linearity-table input:not([readonly])');
+            if (linInput) linInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+          } catch (e) {
+            console.error("Error loading form data:", e);
+          }
+        }
+
         function loadSpecs() {
           const saved = localStorage.getItem('calibrationSpecs');
           const specsCell = document.getElementById('specs-cell');
@@ -864,6 +1070,7 @@
             }
           }
 
+          loadAllCalibrationData(); // Trigger unified load after specs
           updateSpecsDisplay();
           updateGlobalPrecision();
         }
@@ -1036,6 +1243,7 @@
         }
 
         function toleransiKalibrasi() {
+          saveAllCalibrationData(); // Ensure everything is saved before leaving
           const d = getResolutionFromSpecs();
           const max = getCapacityFromSpecs();
           localStorage.setItem('calibrationReadability', d);
@@ -1258,13 +1466,23 @@
 
         // Inisialisasi perhitungan saat halaman dimuat
         document.addEventListener("DOMContentLoaded", function () {
+          loadSpecs();
           refreshAllTableFormatting();
+
+          // Auto-save on any input in the container
+          const mainContainer = document.querySelector('.bg-white.p-8') || document.body;
+          mainContainer.addEventListener('input', function (e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+              saveAllCalibrationData();
+            }
+          });
 
           // Observer untuk mendeteksi perubahan pada specs-cell (Daya Baca)
           const specsCell = document.getElementById("specs-cell");
           if (specsCell) {
             const observer = new MutationObserver(() => {
               refreshAllTableFormatting();
+              saveAllCalibrationData();
             });
             observer.observe(specsCell, { characterData: true, childList: true, subtree: true });
           }
@@ -1896,7 +2114,7 @@
             }
           }
         });
-      </script>
+      </script> 
 
       <!-- 4. PENGUJIAN LINEARITY -->
       <section class="mb-8">
@@ -2923,14 +3141,14 @@
             <tr>
               <td class="border border-black px-2 py-1 text-left">Depan (2)</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 ecc-input"
                   placeholder="499,9" />
               </td>
             </tr>
             <tr>
               <td class="border border-black px-2 py-1 text-left">Kiri (3)</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 ecc-input"
                   placeholder="500,1" />
               </td>
             </tr>
@@ -2939,14 +3157,14 @@
                 Belakang (4)
               </td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 ecc-input"
                   placeholder="500,1" />
               </td>
             </tr>
             <tr>
               <td class="border border-black px-2 py-1 text-left">Kanan (5)</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 ecc-input"
                   placeholder="500,0" />
               </td>
             </tr>
@@ -3057,48 +3275,48 @@
               </td>
               <td class="border border-black px-2 py-1">p1</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 hys-p"
                   placeholder="-" value="-" />
               </td>
               <td class="border border-black px-2 py-1">q1</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 hys-q"
                   placeholder="-" value="-" />
               </td>
             </tr>
             <tr>
               <td class="border border-black px-2 py-1">p2</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 hys-p"
                   placeholder="-" value="-" />
               </td>
               <td class="border border-black px-2 py-1">q2</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 hys-q"
                   placeholder="-" value="-" />
               </td>
             </tr>
             <tr>
               <td class="border border-black px-2 py-1">p3</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 hys-p"
                   placeholder="-" value="-" />
               </td>
               <td class="border border-black px-2 py-1">q3</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 hys-q"
                   placeholder="-" value="-" />
               </td>
             </tr>
             <tr>
               <td class="border border-black px-2 py-1">p4</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 hys-p"
                   placeholder="-" value="-" />
               </td>
               <td class="border border-black px-2 py-1">q4</td>
               <td class="border border-black px-2 py-1">
-                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0"
+                <input type="text" class="w-full border-0 text-center focus:outline-none focus:ring-0 p-0 hys-q"
                   placeholder="-" value="-" />
               </td>
             </tr>
@@ -4292,19 +4510,37 @@
     const stdMax = document.getElementById("std-max")?.value || "0";
     const dVal = getResolutionFromSpecs();
     const repTolVal = 5 * dVal;
-    const repTol = formatNumber(repTolVal);
+    const repTol = formatNumber(repTolVal, 2);
     const kesimpulanRep = parseNumber(stdMax) <= repTolVal ? "MS" : "TMS";
 
     doc.autoTable({
       startY: finalY + 2,
-      head: [[`Nominal (${g_currentUnit})`, `Std. Deviasi (${g_currentUnit})`, `Std. Dev Max (${g_currentUnit})`, `Toleransi (${g_currentUnit})`, 'Kesimpulan']],
+      head: [
+        [
+          { content: `Nominal\n(${g_currentUnit})`, rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+          { content: `Std. Deviasi\n(${g_currentUnit})`, rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+          { content: 'Standar Deviasi Maks.\n(Smaks.)', styles: { halign: 'center' } },
+          { content: 'Toleransi (±)', styles: { halign: 'center' } },
+          { content: 'Kesimpulan', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } }
+        ],
+        [
+          { content: g_currentUnit, styles: { halign: 'center' } },
+          { content: g_currentUnit, styles: { halign: 'center' } }
+        ]
+      ],
       body: [
-        [document.getElementById("nominal-50")?.value || "600", sd50, stdMax, repTol, kesimpulanRep],
-        [document.getElementById("nominal-100")?.value || "1200", sd100, stdMax, repTol, kesimpulanRep]
+        [
+          document.getElementById("nominal-50")?.value || "600",
+          sd50,
+          { content: stdMax, rowSpan: 2, styles: { valign: 'middle', fontStyle: 'bold' } },
+          { content: repTol, rowSpan: 2, styles: { valign: 'middle', fontStyle: 'bold' } },
+          { content: kesimpulanRep, rowSpan: 2, styles: { valign: 'middle', fontStyle: 'bold' } }
+        ],
+        [document.getElementById("nominal-100")?.value || "1200", sd100]
       ],
       theme: 'grid',
-      styles: { fontSize: 9, halign: 'center' },
-      headStyles: { fillColor: [220, 220, 220], textColor: 0 },
+      styles: { fontSize: 9, halign: 'center', cellPadding: 2, lineWidth: 0.1, lineColor: [0, 0, 0] },
+      headStyles: { fillColor: [220, 220, 220], textColor: 0, fontStyle: 'bold' },
       margin: pageMargins
     });
 
@@ -4384,11 +4620,25 @@
 
     doc.autoTable({
       startY: finalY + 2,
-      head: [[`Nominal (${g_currentUnit})`, `Koreksi (${g_currentUnit})`, `Toleransi (${g_currentUnit})`, 'Kesimpulan', `U95 (${g_currentUnit})`]],
+      head: [
+        [
+          { content: 'Nominal Batu Timbang', styles: { halign: 'center', valign: 'middle' } },
+          { content: 'Koreksi (C)', styles: { halign: 'center', valign: 'middle' } },
+          { content: 'Toleransi (±)', styles: { halign: 'center', valign: 'middle' } },
+          { content: 'Kesimpulan', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+          { content: 'Ketidakpastian (U95)', styles: { halign: 'center', valign: 'middle' } }
+        ],
+        [
+          { content: g_currentUnit, styles: { halign: 'center' } },
+          { content: g_currentUnit, styles: { halign: 'center' } },
+          { content: g_currentUnit, styles: { halign: 'center' } },
+          { content: g_currentUnit, styles: { halign: 'center' } }
+        ]
+      ],
       body: linData,
       theme: 'grid',
-      styles: { fontSize: 9, halign: 'center' },
-      headStyles: { fillColor: [220, 220, 220], textColor: 0 },
+      styles: { fontSize: 9, halign: 'center', cellPadding: 2, lineWidth: 0.1, lineColor: [0, 0, 0] },
+      headStyles: { fillColor: [220, 220, 220], textColor: 0, fontStyle: 'bold' },
       margin: pageMargins
     });
 
@@ -5176,9 +5426,16 @@
   function getValidMasterData() {
     const allMaster = JSON.parse(localStorage.getItem('masterBatuTimbang') || '[]');
     const ids = [];
-    for (let i = 1; i <= 3; i++) {
-      const val = document.getElementById(`support-id-${i}`)?.value.trim();
-      if (val) ids.push(val.toUpperCase());
+
+    // Iterate through all rows in the support table
+    const supportTableBody = document.getElementById('support-table-body');
+    if (supportTableBody) {
+      const rows = supportTableBody.querySelectorAll('tr');
+      rows.forEach((row, idx) => {
+        const i = idx + 1;
+        const val = document.getElementById(`support-id-${i}`)?.value.trim();
+        if (val) ids.push(val.toUpperCase());
+      });
     }
 
     // If no IDs are entered, return everything (fallback behavior)
@@ -5192,11 +5449,6 @@
   }
 
   function openMasterLookup(type, elementId = null) {
-    if (type === 'support-row') {
-      masterBatuData = JSON.parse(localStorage.getItem('masterBatuTimbang') || '[]');
-    } else {
-      masterBatuData = getValidMasterData(); // USE FILTERED DATA
-    }
     const allMasterTotal = JSON.parse(localStorage.getItem('masterBatuTimbang') || '[]');
 
     if (allMasterTotal.length === 0) {
@@ -5204,16 +5456,39 @@
       return;
     }
 
-    if (masterBatuData.length === 0) {
-      alert('Tidak ada Data Master yang cocok dengan ID di "DATA BATU TIMBANG YANG DIGUNAKAN".\nSilakan isi tabel 1B terlebih dahulu.');
-      return;
+    if (type === 'support-row') {
+      masterBatuData = allMasterTotal;
+    } else {
+      masterBatuData = getValidMasterData(); // USE FILTERED DATA
+      if (masterBatuData.length === 0) {
+        alert('Tidak ada Data Master yang cocok dengan ID di "DATA BATU TIMBANG YANG DIGUNAKAN".\nSilakan isi tabel 1B terlebih dahulu.');
+        return;
+      }
     }
 
     currentLookupTarget = { type, elementId };
+
+    // Try to pre-select based on current element value
+    let preSelectedId = "";
+    if (elementId) {
+      if (type === 'support-row') {
+        const idx = elementId.replace('support-row-', '');
+        preSelectedId = document.getElementById(`support-id-${idx}`)?.value || "";
+      } else if (type === 'pre-adj') {
+        preSelectedId = document.getElementById('support-id-1')?.value || ""; // Default to first support
+      } else if (type === 'post-adj') {
+        preSelectedId = document.getElementById('support-id-1')?.value || "";
+      } else if (type === 'linearity') {
+        // Logic to try and find current ID or just leave empty
+      }
+    }
+
     const select = document.getElementById('lookup-id-select');
-    const currentValue = select.value;
     select.innerHTML = '<option value="">Pilih ID Batu Timbang...</option>' +
-      masterBatuData.map(d => '<option value="' + d.id + '"' + (d.id === currentValue ? ' selected' : '') + '>' + d.id + ' (' + d.sertifikat + ')</option>').join('');
+      masterBatuData.map(d => {
+        const isSelected = d.id === preSelectedId;
+        return '<option value="' + d.id + '"' + (isSelected ? ' selected' : '') + '>' + d.id + ' (' + d.sertifikat + ')</option>';
+      }).join('');
 
     document.getElementById('modal-master-lookup').classList.remove('hidden');
     renderLookupWeights();
@@ -5239,9 +5514,46 @@
     const confirmBtn = document.getElementById('lookup-confirm-btn');
 
     if (!id) {
-      container.innerHTML = '<p class=\"text-center text-gray-400 py-20 bg-gray-50\">Pilih ID Batu Timbang terlebih dahulu</p>';
+      // IF NO ID SELECTED: Show list of available SETS
       if (bulkActions) bulkActions.classList.add('hidden');
       if (footer) footer.classList.add('hidden');
+
+      if (!masterBatuData || masterBatuData.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-400 py-20 bg-gray-50">Tidak ada data master tersedia</p>';
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="bg-indigo-50 p-3 text-center text-sm text-indigo-700 mb-0 border-b border-indigo-100 font-medium">
+          Pilih salah satu Set Batu Timbang di bawah ini:
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse text-left text-xs">
+            <thead>
+              <tr class="bg-gray-100 text-gray-700 uppercase text-[10px] font-bold">
+                <th class="border-b border-gray-200 p-3">No. Identitas / ID</th>
+                <th class="border-b border-gray-200 p-3">Merek / Model</th>
+                <th class="border-b border-gray-200 p-3">No. Sertifikat</th>
+                <th class="border-b border-gray-200 p-3 w-20 text-center">Kelas</th>
+                <th class="border-b border-gray-200 p-3 w-24 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${masterBatuData.map(set => `
+                <tr class="hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-100 group" onclick="document.getElementById('lookup-id-select').value='${set.id}'; renderLookupWeights();">
+                  <td class="p-3 font-bold text-indigo-600">${set.id}</td>
+                  <td class="p-3">${set.merek || '-'}</td>
+                  <td class="p-3 text-gray-600">${set.sertifikat || '-'}</td>
+                  <td class="p-3 text-center"><span class="bg-gray-100 px-2 py-0.5 rounded text-[10px] font-bold">${set.kelas || '-'}</span></td>
+                  <td class="p-3 text-center">
+                    <button class="bg-indigo-600 text-white px-3 py-1 rounded shadow-sm text-[10px] font-bold group-hover:bg-indigo-700 transition-all">Lihat Isi</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
       return;
     }
 
@@ -5285,52 +5597,74 @@
     };
 
     container.innerHTML = `
-      <div class="${isSupportRow ? 'bg-blue-50 p-2 text-center text-xs text-blue-700 mb-2 border border-blue-200 rounded' : 'hidden'}">
-        Klik baris mana saja untuk memilih Set Batu Timbang ini
+      <div class="flex items-center justify-between bg-indigo-50 p-3 border-b border-indigo-100">
+        <div class="flex items-center gap-3">
+           <button onclick="document.getElementById('lookup-id-select').value=''; renderLookupWeights();" class="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-bold text-xs transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              Kembali ke Daftar Set
+           </button>
+           <div class="h-4 w-[1px] bg-indigo-200"></div>
+           <div class="text-xs text-indigo-900">
+             Menampilkan isi Set: <span class="font-bold underline">${set.id}</span>
+           </div>
+        </div>
+        ${isSupportRow ? `
+          <button onclick="selectWeightFromMaster(0)" class="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg shadow-sm text-xs font-bold transition-all flex items-center gap-2 active:scale-95">
+             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+             PILIH SET INI
+          </button>
+        ` : ''}
       </div>
-      <table class="w-full border-collapse text-center text-[10px]">
-        <thead>
-          <tr class="bg-[#92d050] text-black shrink-0">
-            <th rowspan="2" class="border border-gray-400 p-1 w-8">${isMulti ? '' : 'Pilih'}</th>
-            <th colspan="3" class="border border-gray-400 p-1 bg-[#c5e0b4]">Nominal</th>
-            <th colspan="3" class="border border-gray-400 p-1 bg-[#c5e0b4]">Massa Konvensional</th>
-            <th colspan="3" class="border border-gray-400 p-1 bg-[#c5e0b4]">Ketidakpastian</th>
-          </tr>
-          <tr class="bg-[#e2efda] text-black font-bold">
-            <th class="border border-gray-400 p-1 w-12">mg</th>
-            <th class="border border-gray-400 p-1 w-12">g</th>
-            <th class="border border-gray-400 p-1 w-12">Kg</th>
-            <th class="border border-gray-400 p-1 w-20">mg</th>
-            <th class="border border-gray-400 p-1 w-20">g</th>
-            <th class="border border-gray-400 p-1 w-24">Kg</th>
-            <th class="border border-gray-400 p-1 w-20">mg</th>
-            <th class="border border-gray-400 p-1 w-20">g</th>
-            <th class="border border-gray-400 p-1 w-24">Kg</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${set.weights.map((w, idx) => `
-            <tr onclick="${isMulti ? '' : `selectWeightFromMaster(${idx})`}" class="${isMulti ? '' : 'cursor-pointer hover:bg-amber-50'} transition-colors border-b border-gray-200">
-              <td class="border border-gray-200 p-1.5">
-                ${isMulti ? `<input type="checkbox" class="weight-checkbox w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" value="${idx}" checked>` : `
-                  <div class="text-indigo-600 font-bold text-[10px] flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                  </div>
-                `}
-              </td>
-              <td class="border border-gray-200 px-1 py-1.5">${getDisp(w, 'nomMg')}</td>
-              <td class="border border-gray-200 px-1 py-1.5 font-bold">${getDisp(w, 'nomG')}</td>
-              <td class="border border-gray-200 px-1 py-1.5">${getDisp(w, 'nomKg')}</td>
-              <td class="border border-gray-200 px-1 py-1.5 italic text-gray-600">${getDisp(w, 'mcMg')}</td>
-              <td class="border border-gray-200 px-1 py-1.5 italic text-gray-800 font-medium">${getDisp(w, 'mcG')}</td>
-              <td class="border border-gray-200 px-1 py-1.5 italic text-gray-600">${getDisp(w, 'mcKg')}</td>
-              <td class="border border-gray-200 px-1 py-1.5 text-gray-500">${getDisp(w, 'uMg')}</td>
-              <td class="border border-gray-200 px-1 py-1.5 text-indigo-600 font-medium">${getDisp(w, 'uG')}</td>
-              <td class="border border-gray-200 px-1 py-1.5 text-gray-500">${getDisp(w, 'uKg')}</td>
+      
+      <div class="${isSupportRow ? 'bg-amber-50 p-2 text-center text-[11px] text-amber-800 border-b border-amber-100 italic' : 'hidden'}">
+        Klik baris mana saja di bawah ini untuk memilih Set Batu Timbang ini
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse text-center text-[10px]">
+          <thead>
+            <tr class="bg-[#92d050] text-black">
+              <th rowspan="2" class="border border-gray-400 p-1 w-8 font-bold">${isMulti ? '' : 'Pilih'}</th>
+              <th colspan="3" class="border border-gray-400 p-1 bg-[#c5e0b4] font-bold">Nominal</th>
+              <th colspan="3" class="border border-gray-400 p-1 bg-[#c5e0b4] font-bold">Massa Konvensional</th>
+              <th colspan="3" class="border border-gray-400 p-1 bg-[#c5e0b4] font-bold">Ketidakpastian</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
+            <tr class="bg-[#e2efda] text-black font-bold">
+              <th class="border border-gray-400 p-1 w-12">mg</th>
+              <th class="border border-gray-400 p-1 w-12">g</th>
+              <th class="border border-gray-400 p-1 w-12">Kg</th>
+              <th class="border border-gray-400 p-1 w-20">mg</th>
+              <th class="border border-gray-400 p-1 w-20">g</th>
+              <th class="border border-gray-400 p-1 w-24">Kg</th>
+              <th class="border border-gray-400 p-1 w-20">mg</th>
+              <th class="border border-gray-400 p-1 w-20">g</th>
+              <th class="border border-gray-400 p-1 w-24">Kg</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${set.weights.map((w, idx) => `
+              <tr onclick="${isMulti ? '' : `selectWeightFromMaster(${idx})`}" class="${isMulti ? '' : 'cursor-pointer hover:bg-amber-50'} transition-colors border-b border-gray-200">
+                <td class="border border-gray-200 p-1.5">
+                  ${isMulti ? `<input type="checkbox" class="weight-checkbox w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" value="${idx}" checked>` : `
+                    <div class="text-indigo-600 font-bold text-[10px] flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                  `}
+                </td>
+                <td class="border border-gray-200 px-1 py-1.5">${getDisp(w, 'nomMg')}</td>
+                <td class="border border-gray-200 px-1 py-1.5 font-bold">${getDisp(w, 'nomG')}</td>
+                <td class="border border-gray-200 px-1 py-1.5">${getDisp(w, 'nomKg')}</td>
+                <td class="border border-gray-200 px-1 py-1.5 italic text-gray-600">${getDisp(w, 'mcMg')}</td>
+                <td class="border border-gray-200 px-1 py-1.5 italic text-gray-800 font-medium">${getDisp(w, 'mcG')}</td>
+                <td class="border border-gray-200 px-1 py-1.5 italic text-gray-600">${getDisp(w, 'mcKg')}</td>
+                <td class="border border-gray-200 px-1 py-1.5 text-gray-500">${getDisp(w, 'uMg')}</td>
+                <td class="border border-gray-200 px-1 py-1.5 text-indigo-600 font-medium">${getDisp(w, 'uG')}</td>
+                <td class="border border-gray-200 px-1 py-1.5 text-gray-500">${getDisp(w, 'uKg')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
     `;
   }
 
@@ -5814,4 +6148,124 @@
     closeManualInputModal();
     alert('Nilai berhasil dimasukkan ke baris ' + manualInputTargetRow);
   }
+
+  // --- EXPORT CONFIRMATION & RESET LOGIC ---
+  function confirmExportToPDF() {
+    document.getElementById('modal-export-confirm').classList.remove('hidden');
+  }
+
+  function closeExportConfirm() {
+    document.getElementById('modal-export-confirm').classList.add('hidden');
+  }
+
+  async function handleExportAndReset() {
+    closeExportConfirm();
+    // 1. Process Export
+    await exportToPDF();
+
+    // 2. Clear Form
+    resetCalibrationForm();
+  }
+
+  function resetCalibrationForm() {
+    // A. Reset identity & header
+    const idsToClear = [
+      'cert-no', 'no-identitas', 'bal-merk', 'bal-sn', 'bal-loc',
+      'input-cap', 'input-d', 'input-e', 'cal-date', 'next-cal-date',
+      'env-suhu', 'env-rh', 'env-pa',
+      'nominal-50', 'nominal-100', 'ecc-nominal', 'input-nominal-hys'
+    ];
+    idsToClear.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // B. Reset support data (Section 1B)
+    for (let i = 1; i <= 3; i++) {
+      ['id', 'cert', 'class', 'last', 'next'].forEach(prefix => {
+        const el = document.getElementById(`support-${prefix}-${i}`);
+        if (el) el.value = '';
+      });
+    }
+
+    // C. Reset Table Inputs
+    document.querySelectorAll('input:not([readonly])').forEach(inp => {
+      if (inp.type === 'text' || inp.type === 'number') inp.value = '';
+    });
+
+    // D. Reset Data Attributes
+    document.querySelectorAll('[data-base-weight]').forEach(el => {
+      el.dataset.baseWeight = '';
+      if (el.tagName !== 'INPUT') el.innerText = '-';
+    });
+    document.querySelectorAll('[data-cert-u]').forEach(el => el.dataset.certU = '');
+    document.querySelectorAll('[data-cert-kelas]').forEach(el => el.dataset.certKelas = '');
+
+    // E. Reset Calculated Labels (Specific spans)
+    const labelsToReset = [
+      'pre-adj-nominal', 'post-adj-nominal', 'hys-nominal-display',
+      'std-max-display', 'linearity-x-display', 'u95-max-display', 'lop-display'
+    ];
+    labelsToReset.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = '-';
+    });
+
+    // F. Clear Storage & Refresh
+    localStorage.removeItem('calibrationFormData');
+    refreshStaticWeights();
+
+    // Trigger recalculation (empty state)
+    if (typeof calculateRepeatability === 'function') calculateRepeatability();
+    if (typeof calculatePreAdjustment === 'function') calculatePreAdjustment();
+    if (typeof calculatePostAdjustment === 'function') calculatePostAdjustment();
+    if (typeof calculateEccentricity === 'function') calculateEccentricity();
+    if (typeof calculateHysterisis === 'function') calculateHysterisis();
+
+    alert('Formulir berhasil dikosongkan.');
+  }
 </script>
+
+<!-- MODAL EXPORT CONFIRMATION -->
+<div id="modal-export-confirm" class="hidden fixed inset-0 z-[100] overflow-y-auto">
+  <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+      <div class="absolute inset-0 bg-gray-900 opacity-75 backdrop-blur-sm"></div>
+    </div>
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+    <div
+      class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-100">
+      <div class="bg-white px-6 pt-8 pb-6 sm:p-8 sm:pb-6">
+        <div class="sm:flex sm:items-start">
+          <div
+            class="mx-auto flex-shrink-0 flex items-center justify-center h-14 w-14 rounded-full bg-red-100 sm:mx-0 sm:h-12 sm:w-12">
+            <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+          </div>
+          <div class="mt-4 text-center sm:mt-0 sm:ml-6 sm:text-left">
+            <h3 class="text-xl leading-6 font-bold text-gray-900" id="modal-title">
+              Export & Reset Form?
+            </h3>
+            <div class="mt-3">
+              <p class="text-sm text-gray-500 leading-relaxed">
+                Apakah Anda yakin ingin mengekspor data ke PDF dan <span class="font-semibold text-red-600">mengosongkan
+                  seluruh isi formulir</span>?
+                Data yang sedang diisi akan dihapus secara permanen untuk memudahkan pengisian data kalibrasi
+                berikutnya.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bg-gray-50 px-6 py-4 sm:px-8 sm:flex sm:flex-row-reverse gap-3">
+        <button type="button" onclick="handleExportAndReset()"
+          class="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-5 py-2.5 bg-red-600 text-base font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-0 sm:w-auto sm:text-sm transition-all active:scale-95">
+          Ya, Export & Reset
+        </button>
+        <button type="button" onclick="closeExportConfirm()"
+          class="mt-3 w-full inline-flex justify-center rounded-xl border border-gray-300 shadow-sm px-5 py-2.5 bg-white text-base font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm transition-all active:scale-95">
+          Tidak, Batalkan
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
