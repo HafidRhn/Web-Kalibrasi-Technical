@@ -885,12 +885,20 @@
             },
             // Pre & Post Adjustment
             preAdj: {
+              nominal: document.getElementById('pre-adj-nominal')?.innerText || '',
+              nominalBase: document.getElementById('pre-adj-nominal')?.dataset.baseWeight || '',
+              mc: document.getElementById('pre-adj-mc')?.innerText || '',
+              mcBase: document.getElementById('pre-adj-mc')?.dataset.baseWeight || '',
               z1: document.querySelector('.pre-adj-z1')?.value || '',
               z2: document.querySelector('.pre-adj-z2')?.value || '',
               r1: document.querySelector('.pre-adj-r1')?.value || '',
               r2: document.querySelector('.pre-adj-r2')?.value || ''
             },
             postAdj: {
+              nominal: document.getElementById('post-adj-nominal')?.innerText || '',
+              nominalBase: document.getElementById('post-adj-nominal')?.dataset.baseWeight || '',
+              mc: document.getElementById('post-adj-mc')?.innerText || '',
+              mcBase: document.getElementById('post-adj-mc')?.dataset.baseWeight || '',
               z1: document.querySelector('.post-adj-z1')?.value || '',
               z2: document.querySelector('.post-adj-z2')?.value || '',
               r1: document.querySelector('.post-adj-r1')?.value || '',
@@ -983,12 +991,32 @@
 
             // Restore Pre & Post adjustment
             if (data.preAdj) {
+              const preNom = document.getElementById('pre-adj-nominal');
+              if (preNom) {
+                if (data.preAdj.nominal) preNom.innerText = data.preAdj.nominal;
+                if (data.preAdj.nominalBase) preNom.dataset.baseWeight = data.preAdj.nominalBase;
+              }
+              const preMc = document.getElementById('pre-adj-mc');
+              if (preMc) {
+                if (data.preAdj.mc) preMc.innerText = data.preAdj.mc;
+                if (data.preAdj.mcBase) preMc.dataset.baseWeight = data.preAdj.mcBase;
+              }
               document.querySelector('.pre-adj-z1').value = data.preAdj.z1 || '';
               document.querySelector('.pre-adj-z2').value = data.preAdj.z2 || '';
               document.querySelector('.pre-adj-r1').value = data.preAdj.r1 || '';
               document.querySelector('.pre-adj-r2').value = data.preAdj.r2 || '';
             }
             if (data.postAdj) {
+              const postNom = document.getElementById('post-adj-nominal');
+              if (postNom) {
+                if (data.postAdj.nominal) postNom.innerText = data.postAdj.nominal;
+                if (data.postAdj.nominalBase) postNom.dataset.baseWeight = data.postAdj.nominalBase;
+              }
+              const postMc = document.getElementById('post-adj-mc');
+              if (postMc) {
+                if (data.postAdj.mc) postMc.innerText = data.postAdj.mc;
+                if (data.postAdj.mcBase) postMc.dataset.baseWeight = data.postAdj.mcBase;
+              }
               document.querySelector('.post-adj-z1').value = data.postAdj.z1 || '';
               document.querySelector('.post-adj-z2').value = data.postAdj.z2 || '';
               document.querySelector('.post-adj-r1').value = data.postAdj.r1 || '';
@@ -1173,27 +1201,37 @@
         }
 
         function getAccuracyClass() {
+          const stored = localStorage.getItem('calibrationSettings');
+          if (stored) {
+            const settings = JSON.parse(stored);
+            if (settings.accuracyClass) return settings.accuracyClass;
+          }
           const savedClass = localStorage.getItem('calibrationClass');
           if (savedClass) return savedClass;
-          // Fallback to calibrationSettings if available
-          const settings = JSON.parse(localStorage.getItem('calibrationSettings') || '{}');
-          if (settings.accuracyClass) return settings.accuracyClass;
           return "II"; // Default
         }
 
         function getVerificationScaleInterval() {
+          const stored = localStorage.getItem('calibrationSettings');
+          if (stored) {
+            const settings = JSON.parse(stored);
+            if (settings.calibrationE && !isNaN(parseFloat(settings.calibrationE))) {
+              return parseFloat(settings.calibrationE);
+            }
+          }
           const savedE = localStorage.getItem('calibrationE');
           if (savedE && !isNaN(parseFloat(savedE))) return parseFloat(savedE);
 
           // Fallback to specs-cell
           const specsCell = document.getElementById("specs-cell");
-          if (specsCell && specsCell.dataset.e) return parseFloat(specsCell.dataset.e);
+          if (specsCell && specsCell.dataset.e && parseFloat(specsCell.dataset.e) > 0) return parseFloat(specsCell.dataset.e);
 
           const innerText = specsCell ? specsCell.innerText : "";
           if (innerText.includes("/")) {
-            const eVal_str = innerText.split("/").pop().replace("g", "").trim().replace(",", ".");
+            const parts = innerText.split("/");
+            const eVal_str = parts[parts.length - 1].replace(/[a-z]/gi, "").trim().replace(",", ".");
             const val = parseFloat(eVal_str);
-            if (!isNaN(val)) return val;
+            if (!isNaN(val) && val > 0) return val;
           }
 
           // Last fallback: use d * 10 or 1
@@ -4081,41 +4119,55 @@
       }
 
       // U4: 8% * MPE (Buoyancy)
-      // Highest Priority: Use the specific class stored in the row dataset (from Search/Manual Submit)
-      let targetClass = linRows[idx] ? linRows[idx].dataset.certKelas : null;
+      // Highest Priority: Use specialized certMpe if it was stored from Search or Manual Input
+      let mpeValue = 0;
+      if (linRows[idx] && linRows[idx].dataset.certMpe) {
+        mpeValue = parseFloat(linRows[idx].dataset.certMpe.replace(',', '.'));
+      }
 
-      // Secondary Priority: Match based on certificate/ID from Data Pendukung (Section 1B)
-      if (!targetClass) {
-        targetClass = resultU.kelas;
+      // Secondary Priority: Attempt to use result from findMasterUncertainty
+      if (mpeValue === 0 && resultU && resultU.mpe) {
+        mpeValue = resultU.mpe;
+      }
+
+      if (mpeValue === 0) {
+        // Tertiary Priority: Use the specific class stored in the row dataset (from Search/Manual Submit)
+        let targetClass = linRows[idx] ? linRows[idx].dataset.certKelas : null;
+
+        // Secondary Priority: Match based on certificate/ID from Data Pendukung (Section 1B)
         if (!targetClass) {
-          for (let i = 1; i <= 3; i++) {
-            const idInput = document.getElementById(`support-id-${i}`);
-            const classInput = document.getElementById(`support-class-${i}`);
-            if (idInput && classInput && idInput.value !== "") {
-              const res = findMasterUncertainty(nominalDisplay);
-              if (res.kelas) targetClass = res.kelas;
+          targetClass = resultU.kelas;
+          if (!targetClass) {
+            for (let i = 1; i <= 3; i++) {
+              const idInput = document.getElementById(`support-id-${i}`);
+              const classInput = document.getElementById(`support-class-${i}`);
+              if (idInput && classInput && idInput.value !== "") {
+                const res = findMasterUncertainty(nominalDisplay);
+                if (res.kelas) targetClass = res.kelas;
+              }
             }
           }
         }
-      }
 
-      // Tertiary Priority: Check if nominalDisplay literally contains one of the support IDs
-      if (!targetClass) {
-        for (let i = 1; i <= 3; i++) {
-          const idVal = document.getElementById(`support-id-${i}`)?.value;
-          const classVal = document.getElementById(`support-class-${i}`)?.value;
-          if (idVal && classVal && nominalDisplay.includes(idVal)) {
-            targetClass = classVal;
+        // Tertiary Priority: Check if nominalDisplay literally contains one of the support IDs
+        if (!targetClass) {
+          for (let i = 1; i <= 3; i++) {
+            const idVal = document.getElementById(`support-id-${i}`)?.value;
+            const classVal = document.getElementById(`support-class-${i}`)?.value;
+            if (idVal && classVal && nominalDisplay.includes(idVal)) {
+              targetClass = classVal;
+            }
           }
         }
+
+        // Final Fallback: First active class from Section 1B, then "F1" (Safe Global Default)
+        if (!targetClass) {
+          targetClass = globalDefaultClass || "F1";
+        }
+
+        mpeValue = getMPEWithBreakdown(nominalVal, targetClass);
       }
 
-      // Final Fallback: First active class from Section 1B, then "F1" (Safe Global Default)
-      if (!targetClass) {
-        targetClass = globalDefaultClass || "F1";
-      }
-
-      const mpeValue = getMPEWithBreakdown(nominalVal, targetClass);
       const u4 = 0.08 * (mpeValue / 1000); // 8% of MPE (converted to grams)
       cells[7].innerText = formatNumber(u4, 9);
 
@@ -4258,10 +4310,6 @@
           const targetMgVal = rawTargetNum * 1000;
           if (w.nomMg && w.nomMg !== "-" && parseNumber(w.nomMg) === targetMgVal && (w.nomMg.includes('*') === targetMark)) isStringMatch = true;
         }
-
-        if (isNumericMatch || isStringMatch) {
-          console.log(`      ✅ [U1 MATCH] ${w.parentIdentitas} | ${w.nominal || ''}${w.unit || ''} | totalGram=${totalGram} | U=${w.uG || w.uKg || w.uMg || w.u}`);
-        }
         return isNumericMatch || isStringMatch;
       });
 
@@ -4276,7 +4324,7 @@
 
         let uVal = null;
         for (const u of uniqueUnits) {
-          const key = u === 'g' ? 'uG' : (u === 'kg' ? 'uKg' : 'uMg');
+          const key = u === 'g' ? 'uG' : (u === 'kg' ? 'uKg' : (u === 'mg' ? 'uMg' : 'u')); // Added 'u' as fallback key
           if (first[key] && first[key] !== "-") {
             const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
             const rawVal = parseFloat(first[key].toString().replace(/\./g, "").replace(",", "."));
@@ -4284,13 +4332,11 @@
             break;
           }
         }
-        if (uVal === null && first.u && first.u !== "-") {
-          uVal = parseFloat(first.u.toString().replace(/\./g, "").replace(",", "."));
-        }
+        if (uVal === null && first.u && first.u !== "-") uVal = parseFloat(first.u.toString().replace(/\./g, "").replace(",", "."));
 
         let mcVal = null;
         for (const u of uniqueUnits) {
-          const key = u === 'g' ? 'mcG' : (u === 'kg' ? 'mcKg' : 'mcMg');
+          const key = u === 'g' ? 'mcG' : (u === 'kg' ? 'mcKg' : (u === 'mg' ? 'mcMg' : 'mc')); // Added 'mc' as fallback key
           if (first[key] && first[key] !== "-") {
             const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
             const rawVal = parseFloat(first[key].toString().replace(/\./g, "").replace(",", "."));
@@ -4298,36 +4344,47 @@
             break;
           }
         }
-        if (mcVal === null && first.mc && first.mc !== "-") {
-          mcVal = parseFloat(first.mc.toString().replace(/\./g, "").replace(",", "."));
-        }
+        if (mcVal === null && first.mc && first.mc !== "-") mcVal = parseFloat(first.mc.toString().replace(/\./g, "").replace(",", "."));
 
-        return { u: uVal, mc: mcVal, kelas: resolvedClass || "" };
+        const mpeVal = getMPEWithBreakdown(rawTargetNum, resolvedClass || "F1");
+
+        return { u: uVal, mc: mcVal, kelas: resolvedClass || "", mpe: mpeVal };
       }
 
       // 2. Composite Logic
       if (Math.abs(rawTargetNum - 1500) < 0.001) {
         const r1000 = findMasterUncertainty("1000", depth + 1);
         const r500 = findMasterUncertainty("500", depth + 1);
-        if (r1000.u !== null && r500.u !== null) {
-          return { u: r1000.u + r500.u, mc: (r1000.mc || 1000) + (r500.mc || 500), kelas: r1000.kelas };
+        if (r1000.mpe !== undefined || r500.mpe !== undefined) {
+          return {
+            u: (r1000.u || 0) + (r500.u || 0),
+            mc: (r1000.mc || 1000) + (r500.mc || 500),
+            kelas: r1000.kelas || r500.kelas,
+            mpe: (r1000.mpe || 0) + (r500.mpe || 0)
+          };
         }
       } else if (Math.abs(rawTargetNum - 2000) < 0.001) {
         const r1000 = findMasterUncertainty("1000", depth + 1);
         const r1000Star = findMasterUncertainty("1000*", depth + 1);
-        if (r1000.u !== null && r1000Star.u !== null) {
-          return { u: r1000.u + r1000Star.u, mc: (r1000.mc || 1000) + (r1000Star.mc || 1000), kelas: r1000.kelas };
+        if (r1000.mpe !== undefined || r1000Star.mpe !== undefined) {
+          return {
+            u: (r1000.u || 0) + (r1000Star.u || 0),
+            mc: (r1000.mc || 1000) + (r1000Star.mc || 1000),
+            kelas: r1000.kelas || r1000Star.kelas,
+            mpe: (r1000.mpe || 0) + (r1000Star.mpe || 0)
+          };
         }
       } else if (Math.abs(rawTargetNum - 3000) < 0.001) {
         // PER USER REQUEST: Must be exactly 2kg + 1kg. No 1kg+1kg*+1kg fallback.
         const combos = [["2000", "1000"], ["2kg", "1kg"]];
         for (const names of combos) {
           const res = names.map(n => findMasterUncertainty(n, depth + 1));
-          if (res.every(r => r.u !== null)) {
+          if (res.some(r => r.mpe !== undefined)) {
             return {
-              u: res.reduce((s, r) => s + r.u, 0),
+              u: res.reduce((s, r) => s + (r.u || 0), 0),
               mc: res.reduce((s, r, i) => s + (r.mc || parseNumber(names[i])), 0),
-              kelas: res[0].kelas
+              kelas: res[0].kelas || res[1].kelas,
+              mpe: res.reduce((sum, r) => sum + (r.mpe || 0), 0)
             };
           }
         }
@@ -4447,21 +4504,24 @@
     const preRi = document.querySelector(".pre-adj-abs-correction")?.value || "-";
     const postRi = document.querySelector(".post-adj-abs-correction")?.value || "-";
 
-    // Dynamic Tolerance calculation for Pre-Adjustment
+    const settings = JSON.parse(localStorage.getItem('calibrationSettings') || '{}');
     const eVal = getVerificationScaleInterval();
     const accClass = getAccuracyClass();
     const nomVal = parseNumber(preNom);
-    const m = nomVal / eVal;
+    const m = (eVal > 0) ? nomVal / eVal : 0;
     const mpeFactor = getMPEFactor(m, accClass);
     const preTolVal = mpeFactor * eVal;
 
-    // Format with appropriate decimals
+    // Fallback computed tolerance string
     let tolDec = g_decimals + 1;
     if (eVal.toString().includes('.')) {
       const eDec = eVal.toString().split('.')[1].length;
       if (eDec > tolDec) tolDec = eDec;
     }
-    const preTol = formatNumber(preTolVal, tolDec);
+    const fallbackPreTol = formatNumber(preTolVal, tolDec);
+
+    // Prioritize the literal string from settings if it looks like a valid number or "-"
+    let preTol = settings.preAdjTolerance || fallbackPreTol;
 
     const kesimpulanPre = Math.abs(parseNumber(postRi)) <= preTolVal ? "MS" : "TMS";
 
@@ -5314,8 +5374,8 @@
 <!-- MODAL MANUAL INPUT FOR LINEARITY -->
 <div id="modal-manual-input"
   class="fixed inset-0 bg-black/50 hidden z-[9999] flex items-center justify-center p-4 no-print">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden text-black">
-    <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-green-600 text-white">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden text-black">
+    <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-green-600 text-white shrink-0">
       <h3 class="font-bold text-lg">Hitung Nominal Batu Timbang</h3>
       <button onclick="closeManualInputModal()" class="text-white opacity-70 hover:opacity-100">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -5325,7 +5385,7 @@
         </svg>
       </button>
     </div>
-    <div class="p-6 text-black">
+    <div class="p-6 text-black overflow-y-auto flex-1 custom-scrollbar">
       <p class="text-sm text-gray-600 mb-4">Pilih dua Batu Timbang dari Master Data untuk menghitung Nominal gabungan
       </p>
 
@@ -5375,10 +5435,17 @@
             <div id="manual-result-mc" class="text-2xl font-bold text-blue-600">-</div>
             <div id="manual-formula-mc" class="text-xs text-gray-500 mt-1"></div>
           </div>
+
+          <!-- MPE result display -->
+          <div class="bg-purple-50 p-4 rounded-lg border-2 border-purple-200 text-black">
+            <label class="block text-sm font-semibold text-gray-700 mb-1">MPE Gabungan</label>
+            <div id="manual-result-mpe" class="text-2xl font-bold text-purple-600">-</div>
+            <div id="manual-formula-mpe" class="text-xs text-gray-500 mt-1"></div>
+          </div>
         </div>
       </div>
     </div>
-    <div class="p-4 border-t border-gray-100 bg-gray-50 flex gap-2">
+    <div class="p-4 border-t border-gray-100 bg-gray-50 flex gap-2 shrink-0">
       <button onclick="closeManualInputModal()"
         class="flex-1 py-3 bg-gray-600 text-white rounded-xl font-bold shadow-lg hover:bg-gray-700 transition-all">
         Tutup
@@ -5788,7 +5855,7 @@
         uG = parseFloat(w.u.toString().replace(/\./g, "").replace(",", "."));
       }
 
-      return { nomG, mcG, uG };
+      return { nomG, mcG, uG, kelas: w.kelas || set.kelas };
     };
 
     const vals = getMasterValues(w);
@@ -5849,8 +5916,11 @@
       mcCell.classList.add('mc-cell');
       mcCell.innerText = mcFormatted;
 
-      // New: Store uncertainty for U1 calculation
       tr.dataset.certU = vals.uG;
+
+      // New: Store MPE for U4 calculation
+      const mpeVal = getMPEWithBreakdown(vals.nomG, vals.kelas || "F1");
+      tr.dataset.certMpe = mpeVal;
 
       refreshStaticWeights();
 
@@ -6013,7 +6083,7 @@
         uG = parseFloat(w.u.toString().replace(/\./g, "").replace(",", "."));
       }
 
-      return { nomG, mcG, uG, kelas: w.kelas };
+      return { nomG, mcG, uG, kelas: w.kelas || set.kelas };
     };
 
     const vals = getMasterValues(w);
@@ -6092,6 +6162,25 @@
         formatNumber(uResult, 9) + ' g';
     }
 
+    // New: Handle MPE Summation with adaptive units (OIML R-111 style)
+    const formatMPEValue = (valMg) => {
+      if (valMg >= 1000000) return (valMg / 1000000).toLocaleString('id-ID') + ' kg';
+      if (valMg >= 1000) return (valMg / 1000).toLocaleString('id-ID') + ' g';
+      return valMg.toLocaleString('id-ID') + ' mg';
+    };
+
+    const mpe1 = getMPEWithBreakdown(manualInputWeights.weight1.nominal, manualInputWeights.weight1.kelas || "F1");
+    const mpe2 = getMPEWithBreakdown(manualInputWeights.weight2.nominal, manualInputWeights.weight2.kelas || "F1");
+    const mpeTotal = mpe1 + mpe2;
+    const mpeLabel = document.getElementById('manual-result-mpe');
+    const mpeFormula = document.getElementById('manual-formula-mpe');
+    if (mpeLabel && mpeFormula) {
+      mpeLabel.textContent = formatMPEValue(mpeTotal);
+      const cls1 = manualInputWeights.weight1.kelas || "F1";
+      const cls2 = manualInputWeights.weight2.kelas || "F1";
+      mpeFormula.textContent = `${formatMPEValue(mpe1)} (${cls1}) + ${formatMPEValue(mpe2)} (${cls2}) = ${formatMPEValue(mpeTotal)}`;
+    }
+
     // Enable submit button
     document.getElementById('manual-submit-btn').disabled = false;
   }
@@ -6141,8 +6230,12 @@
     mcCell.classList.add('mc-cell');
     mcCell.innerText = mcFormatted;
 
-    // New: Store uncertainty for U1 calculation
+    // New: Store uncertainty and MPE for U1 and U4 calculation
     tr.dataset.certU = uResultG;
+
+    const mpe1 = getMPEWithBreakdown(manualInputWeights.weight1.nominal, manualInputWeights.weight1.kelas || "F1");
+    const mpe2 = getMPEWithBreakdown(manualInputWeights.weight2.nominal, manualInputWeights.weight2.kelas || "F1");
+    tr.dataset.certMpe = mpe1 + mpe2;
 
     // Capture class for U4 calculation
     // If weights have different classes, we'll take the first one (most likely same)
