@@ -20,7 +20,10 @@
           Kalibrasi</button>
         <a href="masterBatuTimbang.html"
           class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded shadow transition-all active:scale-95">Master
-          Data</a>
+          Batu Timbang</a>
+        <a href="masterMPE.html"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded shadow transition-all active:scale-95">Master
+          MPE</a>
         <button onclick="openMPEModal()"
           class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded shadow transition-all active:scale-95">Tabel
           MPE</button>
@@ -364,7 +367,7 @@
                 <input type="text" id="env-pa"
                   class="w-16 border-b border-gray-300 focus:border-blue-500 focus:outline-none p-0 bg-transparent text-center"
                   placeholder="0" />
-                <span>hPa</span>
+                <span>Pa</span>
               </div>
             </div>
           </td>
@@ -1304,11 +1307,28 @@
 
         // Fungsi untuk mengonversi string dengan koma desimal ke float
         function parseNumber(value) {
-          if (!value) return 0;
+          if (value === null || value === undefined || value === "") return 0;
           if (typeof value === 'number') return convertFromUnit(value);
-          // Ganti koma dengan titik untuk parsing
-          const cleanValue = String(value).replace(/\./g, "").replace(",", ".");
-          const parsed = parseFloat(cleanValue) || 0;
+
+          let s = String(value).trim();
+          // Detect if it's English (1,000.00) or Indonesian (1.000,00)
+          // If it has both dot and comma
+          if (s.includes('.') && s.includes(',')) {
+            if (s.indexOf('.') < s.indexOf(',')) {
+              // Indonesian: strip dot, replace comma with dot
+              s = s.replace(/\./g, "").replace(",", ".");
+            } else {
+              // English: strip comma
+              s = s.replace(/,/g, "");
+            }
+          } else if (s.includes(',')) {
+            // Only comma: Treat as decimal point (Indonesian)
+            s = s.replace(",", ".");
+          }
+          // Note: If only dot exists, we treat it as decimal point (Standard JS/English)
+          // to avoid turning "5.00" into "500".
+
+          const parsed = parseFloat(s) || 0;
           return convertFromUnit(parsed);
         }
 
@@ -1329,23 +1349,28 @@
             return "0," + "0".repeat(d);
           }
 
-          // Robust rounding to handle floating point noise (e.g., 1.105 -> 1.11)
+          // Robust rounding to handle floating point noise
           const multiplier = Math.pow(10, d);
           const roundedNum = Math.round(convertedNum * multiplier + 0.0000000001) / multiplier;
-          return roundedNum.toFixed(d).replace(".", ",");
+
+          return new Intl.NumberFormat('id-ID', {
+            minimumFractionDigits: d,
+            maximumFractionDigits: d
+          }).format(roundedNum);
         }
 
         // Fungsi khusus untuk format angka di Tabel Regresi (dengan titik ribuan)
         function formatRegressionNumber(num, decimals = null) {
           if (num === null || num === undefined || isNaN(num)) return "-";
 
-          const convertedNum = convertToUnit(num);
+          // DO NOT call convertToUnit(num) here, as x^2, y^2 and xy 
+          // are derived from already converted x,y values.
           const d = (decimals === null) ? g_decimals : decimals;
 
           return new Intl.NumberFormat('id-ID', {
             minimumFractionDigits: d,
             maximumFractionDigits: d
-          }).format(convertedNum);
+          }).format(num);
         }
 
         // Helper for all-purpose calculation logic
@@ -1392,7 +1417,7 @@
           // Ambil Mc dari tabel (dinamis)
           const mcCell = document.getElementById('pre-adj-mc');
           const mcG = mcCell ? parseFloat(mcCell.dataset.baseWeight || 0) : 0;
-          const mc = convertToUnit(mcG);
+          const mc = mcG; // Internal calculation uses grams for consistency
 
           // Hitung rata-rata (simpan nilai presisi penuh untuk perhitungan)
           const zAvg = (z1 + z2) / 2;
@@ -1453,7 +1478,7 @@
           // Ambil Mc dari tabel (dinamis)
           const mcCell = document.getElementById('post-adj-mc');
           const mcG = mcCell ? parseFloat(mcCell.dataset.baseWeight || 0) : 0;
-          const mc = convertToUnit(mcG);
+          const mc = mcG; // Internal calculation uses grams for consistency
 
           // Hitung rata-rata (simpan nilai presisi penuh untuk perhitungan)
           const zAvg = (z1 + z2) / 2;
@@ -2077,9 +2102,9 @@
           const stdTheoretical = 0.41 * d;
 
           // Untuk standar deviasi maksimum, gunakan logika:
-          // Jika Smaks < 0,41*d; gunakan Standar Deviasi Teoritis
-          // Jika tidak, gunakan SD yang dihitung
-          const stdMax = sd100 < stdTheoretical ? stdTheoretical : sd100;
+          // Mencari nilai terbesar dari SD 50% dan SD 100%, lalu bandingkan dengan SD Teoritis
+          const actualSdMax = Math.max(sd50, sd100);
+          const stdMax = actualSdMax < stdTheoretical ? stdTheoretical : actualSdMax;
 
           // Simpan ke variabel global untuk presisi perhitungan Uncertainty
           g_stdMax = stdMax;
@@ -3894,8 +3919,9 @@
         }
 
         if (hasX && !isNaN(valY) && valY !== 0) {
-          const x = valX;
-          const y = valY;
+          // Convert to display unit BEFORE math to match Excel's "number as seen" calculation
+          const x = convertToUnit(valX);
+          const y = convertToUnit(valY);
           const xSq = x * x;
           const ySq = y * y;
           const xy = x * y;
@@ -3946,7 +3972,7 @@
   }
 
   // --- MPE TABLE (From OIML R-111, in mg, indexed by Grams) ---
-  const MPE_TABLE = {
+  const DEFAULT_MPE_TABLE = {
     'E1': { 50000: 25, 20000: 10, 10000: 5, 5000: 2.5, 2000: 1, 1000: 0.5, 500: 0.25, 200: 0.1, 100: 0.05, 50: 0.03, 20: 0.025, 10: 0.02, 5: 0.016, 2: 0.012, 1: 0.01, 0.5: 0.008, 0.2: 0.006, 0.1: 0.005, 0.05: 0.004, 0.02: 0.003, 0.01: 0.003, 0.005: 0.003, 0.002: 0.003, 0.001: 0.003 },
     'E2': { 1000000: 1600, 500000: 800, 200000: 300, 100000: 160, 50000: 80, 20000: 30, 10000: 16, 5000: 8, 2000: 3, 1000: 1.6, 500: 0.8, 200: 0.3, 100: 0.16, 50: 0.1, 20: 0.08, 10: 0.06, 5: 0.05, 2: 0.04, 1: 0.03, 0.5: 0.025, 0.2: 0.02, 0.1: 0.016, 0.05: 0.012, 0.02: 0.01, 0.01: 0.008, 0.005: 0.006, 0.002: 0.006, 0.001: 0.006 },
     'F1': { 5000000: 25000, 2000000: 10000, 1000000: 5000, 500000: 2500, 200000: 1000, 100000: 500, 50000: 250, 20000: 100, 10000: 50, 5000: 25, 2000: 10, 1000: 5, 500: 2.5, 200: 1, 100: 0.5, 50: 0.3, 20: 0.25, 10: 0.2, 5: 0.16, 2: 0.12, 1: 0.08, 0.5: 0.06, 0.2: 0.05, 0.1: 0.04, 0.05: 0.03, 0.02: 0.025, 0.01: 0.025, 0.005: 0.02, 0.002: 0.02, 0.001: 0.02 },
@@ -3957,6 +3983,25 @@
     'M2-3': { 5000000: 1600000, 2000000: 600000, 1000000: 300000, 500000: 160000, 200000: 60000, 100000: 30000, 50000: 16000 },
     'M3': { 5000000: 2500000, 2000000: 1000000, 1000000: 500000, 500000: 250000, 200000: 100000, 100000: 50000, 50000: 25000, 20000: 10000, 10000: 5000, 5000: 2500, 2000: 1000, 1000: 500, 500: 250, 200: 100, 100: 50, 50: 30, 20: 25, 10: 20, 5: 16, 2: 12, 1: 10 }
   };
+
+  // Function to initialize or load MPE table from localStorage
+  function loadMPETable() {
+    let stored = localStorage.getItem('masterMPE');
+    if (!stored) {
+      // First time initialization: populate with defaults
+      localStorage.setItem('masterMPE', JSON.stringify(DEFAULT_MPE_TABLE));
+      return DEFAULT_MPE_TABLE;
+    }
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.error("Error parsing MPE Table from localStorage", e);
+      return DEFAULT_MPE_TABLE;
+    }
+  }
+
+  const MPE_TABLE = loadMPETable();
+
 
   function getMPEWithBreakdown(nominalG, className) {
     if (!className) return 0;
@@ -3995,6 +4040,12 @@
     const U1 = certU95 / 2;
     const U2 = stdMax / Math.sqrt(10);
     const U3 = (0.05 * resolution) / Math.sqrt(3);
+
+    const factor = convertToUnit(1.0);
+    const factorSq = factor * factor;
+
+    const U2D = U2 * factor;
+    const U3D = U3 * factor;
 
     const xVals = [];
     const yVals = [];
@@ -4036,11 +4087,11 @@
         const pred = intercept + slope * xVals[i];
         ssrSum += Math.pow(yVals[i] - pred, 2);
       }
-      // U6 calculation as requested: sqrt(SSR / 8)
-      globalS = Math.sqrt(ssrSum / 8);
+      // U6 calculation restored to dynamic (n-2)
+      globalS = Math.sqrt(ssrSum / Math.max(1, n - 2));
 
       document.getElementById('reg-a').innerText = formatNumber(intercept, 9);
-      document.getElementById('reg-b').innerText = formatNumber(slope, 9);
+      document.getElementById('reg-b').innerText = formatRegressionNumber(slope, 9);
 
       const yBar = sumY / n;
       let ssy = 0;
@@ -4096,10 +4147,11 @@
         }
       }
 
-      let mcDec = 9;
-      if (g_currentUnit === 'g') mcDec = 6;
-      else if (g_currentUnit === 'mg') mcDec = 3;
+      let mcDec = 6;
+      if (g_currentUnit === 'mg') mcDec = 4;
 
+      // Display nominal without unit scaling in the table label if needed, 
+      // but here we use formatNumber which scales correctly.
       cells[1].innerText = formatNumber(nominalVal, 0);
       cells[2].innerText = isNaN(yVal) ? "-" : formatNumber(yVal, mcDec);
       cells[3].innerText = isNaN(xVal) ? "-" : formatNumber(xVal, g_decimals); // Aligned with Daya Baca
@@ -4119,52 +4171,47 @@
       }
 
       // U4: 8% * MPE (Buoyancy)
-      // Highest Priority: Use specialized certMpe if it was stored from Search or Manual Input
-      let mpeValue = 0;
-      if (linRows[idx] && linRows[idx].dataset.certMpe) {
-        mpeValue = parseFloat(linRows[idx].dataset.certMpe.replace(',', '.'));
-      }
+      // Highest Priority: Use the specific class stored in the row dataset (from Search/Manual Submit)
+      let targetClass = linRows[idx] ? linRows[idx].dataset.certKelas : null;
 
-      // Secondary Priority: Attempt to use result from findMasterUncertainty
-      if (mpeValue === 0 && resultU && resultU.mpe) {
-        mpeValue = resultU.mpe;
-      }
-
-      if (mpeValue === 0) {
-        // Tertiary Priority: Use the specific class stored in the row dataset (from Search/Manual Submit)
-        let targetClass = linRows[idx] ? linRows[idx].dataset.certKelas : null;
-
-        // Secondary Priority: Match based on certificate/ID from Data Pendukung (Section 1B)
-        if (!targetClass) {
-          targetClass = resultU.kelas;
-          if (!targetClass) {
-            for (let i = 1; i <= 3; i++) {
-              const idInput = document.getElementById(`support-id-${i}`);
-              const classInput = document.getElementById(`support-class-${i}`);
-              if (idInput && classInput && idInput.value !== "") {
-                const res = findMasterUncertainty(nominalDisplay);
-                if (res.kelas) targetClass = res.kelas;
-              }
-            }
-          }
-        }
-
-        // Tertiary Priority: Check if nominalDisplay literally contains one of the support IDs
+      // Secondary Priority: Match based on certificate/ID from Data Pendukung (Section 1B)
+      if (!targetClass) {
+        targetClass = resultU.kelas;
         if (!targetClass) {
           for (let i = 1; i <= 3; i++) {
-            const idVal = document.getElementById(`support-id-${i}`)?.value;
-            const classVal = document.getElementById(`support-class-${i}`)?.value;
-            if (idVal && classVal && nominalDisplay.includes(idVal)) {
-              targetClass = classVal;
+            const idInput = document.getElementById(`support-id-${i}`);
+            const classInput = document.getElementById(`support-class-${i}`);
+            if (idInput && classInput && idInput.value !== "") {
+              const res = findMasterUncertainty(nominalDisplay);
+              if (res.kelas) targetClass = res.kelas;
             }
           }
         }
+      }
 
-        // Final Fallback: First active class from Section 1B, then "F1" (Safe Global Default)
-        if (!targetClass) {
-          targetClass = globalDefaultClass || "F1";
+      // Tertiary Priority: Check if nominalDisplay literally contains one of the support IDs
+      if (!targetClass) {
+        for (let i = 1; i <= 3; i++) {
+          const idVal = document.getElementById(`support-id-${i}`)?.value;
+          const classVal = document.getElementById(`support-class-${i}`)?.value;
+          if (idVal && classVal && nominalDisplay.includes(idVal)) {
+            targetClass = classVal;
+          }
         }
+      }
 
+      // Final Fallback: First active class from Section 1B, then "F1" (Safe Global Default)
+      if (!targetClass) {
+        targetClass = globalDefaultClass || "F1";
+      }
+
+      // Priority: Use certMpe from dataset if available (Search/Manual Submit)
+      let mpeValue = 0;
+      if (linRows[idx] && linRows[idx].dataset.certMpe) {
+        mpeValue = parseFloat(linRows[idx].dataset.certMpe);
+      } else if (resultU.mpe !== undefined && resultU.mpe !== null) {
+        mpeValue = resultU.mpe;
+      } else {
         mpeValue = getMPEWithBreakdown(nominalVal, targetClass);
       }
 
@@ -4188,36 +4235,39 @@
       // Formula: (Yi - a - bXi)^2
       const localRes = (yVal - intercept - (slope * xVal));
       const ssrRow = Math.pow(localRes, 2);
-      cells[9].innerText = formatNumber(ssrRow, 9);
+
+      cells[9].innerText = formatRegressionNumber(ssrRow * factorSq, 9);
 
       // U6: Regression component (SSR_row / 16 per reference table)
-      // Reference says U6 is (SSR / 16). We assume this is the standard uncertainty.
-      const u6 = ssrRow / 16;
-      cells[10].innerText = formatNumber(u6, 9);
+      const u6D = (ssrRow / 16) * factorSq; // U6 = SSR_scaled / 16
+      cells[10].innerText = formatRegressionNumber(u6D, 9);
 
       // Uc: Combined standard uncertainty
       // Excel Formula: SQRT(U1^2 + U2^2 + U3^2 + U4^2 + U5^2 + U6^2)
-      // NOTE: If U6 column in Excel displays (SSR/16), then squaring it in the formula 
-      // is correct ONLY if (SSR/16) is the standard uncertainty, not the variance.
-      const sumSq = Math.pow(rowU1, 2) + Math.pow(U2, 2) + Math.pow(U3, 2) + Math.pow(u4, 2) + Math.pow(u5, 2) + Math.pow(u6, 2);
-      const Uc = Math.sqrt(sumSq);
+      // We scale everything to the display unit (e.g. kg) BEFORE squaring to match Excel exactly.
+      const u1D = rowU1 * factor;
+      const u4D = u4 * factor;
+      const u5D = u5 * factor;
 
-      console.log(`Row ${idx + 1} (${nominalVal}g) components:`, {
-        u1: rowU1,
-        u2: U2,
-        u3: U3,
-        u4: u4,
-        u5: u5,
-        u6: u6,
-        sumSq: sumSq,
+      const sumSqD = Math.pow(u1D, 2) + Math.pow(U2D, 2) + Math.pow(U3D, 2) + Math.pow(u4D, 2) + Math.pow(u5D, 2) + Math.pow(u6D, 2);
+      const Uc = Math.sqrt(sumSqD);
+
+      console.log(`Row ${idx + 1} (${nominalVal}g) components (scaled):`, {
+        u1: u1D,
+        u2: U2D,
+        u3: U3D,
+        u4: u4D,
+        u5: u5D,
+        u6: u6D,
+        sumSq: sumSqD,
         Uc: Uc
       });
 
-      cells[11].innerText = formatNumber(Uc, 9);
+      cells[11].innerText = formatRegressionNumber(Uc, 9);
 
       // U95: Expanded uncertainty (k=2)
       const U95 = Uc * 2;
-      cells[12].innerText = formatNumber(U95, 9);
+      cells[12].innerText = formatRegressionNumber(U95, 9);
       maxU95s.push(U95);
     });
 
@@ -4225,10 +4275,11 @@
     if (totalRow) {
       const maxVal = Math.max(...maxU95s, 0);
       const valCell = totalRow.cells[totalRow.cells.length - 1];
-      if (valCell) valCell.innerText = formatNumber(maxVal, 9);
+      // Use formatRegressionNumber because maxVal is already in the display unit
+      if (valCell) valCell.innerText = formatRegressionNumber(maxVal, 9);
 
-      // Store raw high precision value for LOP
-      g_u95Max = maxVal;
+      // Store in GRAMS for LOP calculation consistency (smaks and cmaks are in grams)
+      g_u95Max = maxVal / (factor || 1);
     }
 
     // Trigger LOP calculation
@@ -4255,10 +4306,10 @@
 
     const lopDisplay = document.getElementById('lop-display');
     if (lopDisplay) {
-      // Direct raw calculation display forced to 5 decimals
-      lopDisplay.innerText = "F = " + formatNumber(f, 5) + " g";
+      // Use current unit and formatNumber to scale correctly
+      lopDisplay.innerText = "F = " + formatNumber(f, 5) + " " + g_currentUnit;
     }
-    console.log(`✅ [LOP] Updated display: F = ${formatNumber(f, 5)} g`);
+    console.log(`✅ [LOP] Updated display: F = ${formatNumber(f, 5)} ${g_currentUnit}`);
   }
 
   // Master Lookup for U1 (Global across all master data)
@@ -4436,7 +4487,7 @@
       ["Lokasi", document.getElementById("lokasi-alat")?.value || ""],
       ["Tanggal Kalibrasi", document.getElementById("cal-date")?.value || ""],
       ["Interval Kalibrasi", "12 Bulan"],
-      ["Suhu / RH / Pa", `${document.getElementById("env-suhu")?.value || ""} °C / ${document.getElementById("env-rh")?.value || ""} % / ${document.getElementById("env-pa")?.value || ""} hPa`]
+      ["Suhu / RH / Pa", `${document.getElementById("env-suhu")?.value || ""} °C / ${document.getElementById("env-rh")?.value || ""} % / ${document.getElementById("env-pa")?.value || ""} Pa`]
     ];
 
     doc.autoTable({
@@ -4471,7 +4522,9 @@
     doc.text("II. Identitas Kalibrator / Batu Timbang", 14, finalY);
 
     const supportData = [];
-    for (let i = 1; i <= 3; i++) {
+    const supportRows = document.querySelectorAll('#support-table-body tr');
+    supportRows.forEach((row, index) => {
+      const i = index + 1;
       const id = document.getElementById(`support-id-${i}`)?.value || "";
       const cert = document.getElementById(`support-cert-${i}`)?.value || "";
       const cls = document.getElementById(`support-class-${i}`)?.value || "";
@@ -4480,7 +4533,7 @@
       if (id || cert || cls) {
         supportData.push([i, id, cert, cls, last, next]);
       }
-    }
+    });
     // Add dummy row if empty
     if (supportData.length === 0) supportData.push(["-", "-", "-", "-", "-", "-"]);
 
@@ -5386,41 +5439,24 @@
       </button>
     </div>
     <div class="p-6 text-black overflow-y-auto flex-1 custom-scrollbar">
-      <p class="text-sm text-gray-600 mb-4">Pilih dua Batu Timbang dari Master Data untuk menghitung Nominal gabungan
-      </p>
+      <p class="text-sm text-gray-600 mb-4">Pilih satu atau lebih Batu Timbang dari Master Data untuk menghitung hasil
+        gabungan.</p>
 
       <div class="space-y-4">
-        <!-- Batu Timbang 1 -->
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">Batu Timbang 1</label>
-          <button onclick="openMasterLookupForManual(1)"
-            class="w-full px-4 py-3 bg-indigo-50 border-2 border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all text-left flex items-center justify-between group">
-            <div class="flex-1">
-              <div id="manual-weight1-display" class="text-sm text-gray-500">Klik untuk pilih batu timbang...</div>
-            </div>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" class="text-indigo-600">
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="m21 21-4.35-4.35"></path>
-            </svg>
-          </button>
+        <!-- Container untuk baris batu timbang dinamis -->
+        <div id="manual-weights-container" class="space-y-4">
+          <!-- Diisi via JavaScript renderManualWeightRows() -->
         </div>
 
-        <!-- Batu Timbang 2 -->
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">Batu Timbang 2</label>
-          <button onclick="openMasterLookupForManual(2)"
-            class="w-full px-4 py-3 bg-indigo-50 border-2 border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all text-left flex items-center justify-between group">
-            <div class="flex-1">
-              <div id="manual-weight2-display" class="text-sm text-gray-500">Klik untuk pilih batu timbang...</div>
-            </div>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" class="text-indigo-600">
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="m21 21-4.35-4.35"></path>
-            </svg>
-          </button>
-        </div>
+        <!-- Tombol Tambah Baris -->
+        <button onclick="addManualWeightRow()"
+          class="w-full py-2 bg-indigo-100 text-indigo-700 rounded-lg font-bold border-2 border-dashed border-indigo-300 hover:bg-indigo-200 transition-all flex items-center justify-center gap-2 mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14m-7-7v14" />
+          </svg>
+          Tambah Batu Timbang
+        </button>
 
         <!-- Result Display -->
         <div class="space-y-3">
@@ -5477,7 +5513,7 @@
       else if (nom >= 1) nomDisplay = nom + ' g';
       else nomDisplay = Math.round(nom * 1000) + ' mg';
 
-      const classes = ['E1', 'E2', 'F1', 'F2', 'M1', 'M1-2', 'M2', 'M2-3', 'M3'];
+      const classes = Object.keys(MPE_TABLE);
 
       return `
         <tr class="hover:bg-amber-50 transition-colors">
@@ -5827,7 +5863,12 @@
           break;
         }
       }
-      if (nomG === 0) nomG = parseNumber(w.nominal || 0);
+      if (nomG === 0 && w.nominal) {
+        const val = parseFloat(w.nominal.toString().replace(/\./g, "").replace(",", "."));
+        const u = w.unit || 'g';
+        const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
+        nomG = val * mult;
+      }
 
       // Find first available MC
       for (const u of uniqueUnits) {
@@ -5839,7 +5880,12 @@
           break;
         }
       }
-      if (mcG === 0) mcG = parseNumber(w.mc || 0);
+      if (mcG === 0 && w.mc) {
+        const val = parseFloat(w.mc.toString().replace(/\./g, "").replace(",", "."));
+        const u = w.unit || 'g';
+        const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
+        mcG = val * mult;
+      }
 
       // Find first available U
       for (const u of uniqueUnits) {
@@ -5852,7 +5898,10 @@
         }
       }
       if (uG === 0 && w.u && w.u !== "-") {
-        uG = parseFloat(w.u.toString().replace(/\./g, "").replace(",", "."));
+        const val = parseFloat(w.u.toString().replace(/\./g, "").replace(",", "."));
+        const u = w.unit || 'g';
+        const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
+        uG = val * mult;
       }
 
       return { nomG, mcG, uG, kelas: w.kelas || set.kelas };
@@ -5961,8 +6010,8 @@
     closeMasterLookup();
   }
 
-  // Manual Input Modal Functions - Dual Weight Selection
-  let manualInputWeights = { weight1: null, weight2: null };
+  // Manual Input Modal Functions - Multiple Weight Selection Support
+  let manualInputWeights = []; // Array of {nominal, mc, u, label, mpeMg}
   let manualInputTargetField = null;
   let manualInputTargetRow = null; // Track which row opened the modal
 
@@ -5970,17 +6019,75 @@
     // Store which row opened the modal
     manualInputTargetRow = rowId || null;
 
-    // Reset selections
-    manualInputWeights = { weight1: null, weight2: null };
-    document.getElementById('manual-weight1-display').innerHTML = '<span class="text-gray-500">Klik untuk pilih batu timbang...</span>';
-    document.getElementById('manual-weight2-display').innerHTML = '<span class="text-gray-500">Klik untuk pilih batu timbang...</span>';
+    // Reset selections: Start with 2 empty rows as default
+    manualInputWeights = [null, null];
+    renderManualWeightRows();
+
+    // Reset results display
     document.getElementById('manual-result-nominal').textContent = '-';
     document.getElementById('manual-formula-nominal').textContent = '';
     document.getElementById('manual-result-mc').textContent = '-';
     document.getElementById('manual-formula-mc').textContent = '';
+    document.getElementById('manual-result-mpe').textContent = '-';
+    document.getElementById('manual-formula-mpe').textContent = '';
     document.getElementById('manual-submit-btn').disabled = true;
 
     document.getElementById('modal-manual-input').classList.remove('hidden');
+  }
+
+  function addManualWeightRow() {
+    manualInputWeights.push(null);
+    renderManualWeightRows();
+    calculateManualResult(); // recalculate but mostly useful if some were already selected
+  }
+
+  function removeManualWeightRow(index) {
+    // Keep at least one row
+    if (manualInputWeights.length <= 1) {
+      manualInputWeights[0] = null;
+    } else {
+      manualInputWeights.splice(index, 1);
+    }
+    renderManualWeightRows();
+    calculateManualResult();
+  }
+
+  function renderManualWeightRows() {
+    const container = document.getElementById('manual-weights-container');
+    if (!container) return;
+
+    let html = '';
+    manualInputWeights.forEach((w, idx) => {
+      const displayId = `manual-weight-${idx}-display`;
+      const label = `Batu Timbang ${idx + 1}`;
+      const displayText = w ? `<span class="font-semibold text-indigo-700">${w.label}</span>` : 'Klik untuk pilih batu timbang...';
+
+      html += `
+        <div class="relative group">
+          <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex justify-between items-center">
+            ${label}
+            ${manualInputWeights.length > 1 ? `
+              <button onclick="removeManualWeightRow(${idx})" class="text-red-400 hover:text-red-600 transition-colors uppercase text-[10px] font-bold">
+                Hapus
+              </button>
+            ` : ''}
+          </label>
+          <button onclick="openMasterLookupForManual(${idx})"
+            class="w-full px-4 py-3 bg-indigo-50 border-2 ${w ? 'border-indigo-400' : 'border-indigo-200'} rounded-lg hover:bg-indigo-100 transition-all text-left flex items-center justify-between group">
+            <div class="flex-1">
+              <div id="${displayId}" class="text-sm text-gray-600">${displayText}</div>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" class="text-indigo-600">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+          </button>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
   }
 
   // Wrapper function for event-based calls
@@ -6052,22 +6159,34 @@
         const key = u === 'g' ? 'nomG' : (u === 'kg' ? 'nomKg' : 'nomMg');
         if (w[key] && w[key] !== "-") {
           const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
-          nomG = parseNumber(w[key]) * mult;
+          const rawVal = parseFloat(w[key].toString().replace(/\./g, "").replace(",", "."));
+          nomG = rawVal * mult;
           break;
         }
       }
-      if (nomG === 0) nomG = parseNumber(w.nominal || 0);
+      if (nomG === 0 && w.nominal) {
+        const val = parseFloat(w.nominal.toString().replace(/\./g, "").replace(",", "."));
+        const u = w.unit || 'g';
+        const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
+        nomG = val * mult;
+      }
 
       // Find Mc
       for (const u of uniqueUnits) {
         const key = u === 'g' ? 'mcG' : (u === 'kg' ? 'mcKg' : 'mcMg');
         if (w[key] && w[key] !== "-") {
           const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
-          mcG = parseNumber(w[key]) * mult;
+          const rawVal = parseFloat(w[key].toString().replace(/\./g, "").replace(",", "."));
+          mcG = rawVal * mult;
           break;
         }
       }
-      if (mcG === 0) mcG = parseNumber(w.mc || 0);
+      if (mcG === 0 && w.mc) {
+        const val = parseFloat(w.mc.toString().replace(/\./g, "").replace(",", "."));
+        const u = w.unit || 'g';
+        const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
+        mcG = val * mult;
+      }
 
       // Find U
       for (const u of uniqueUnits) {
@@ -6080,42 +6199,30 @@
         }
       }
       if (uG === 0 && w.u && w.u !== "-") {
-        uG = parseFloat(w.u.toString().replace(/\./g, "").replace(",", "."));
+        const val = parseFloat(w.u.toString().replace(/\./g, "").replace(",", "."));
+        const u = w.unit || 'g';
+        const mult = u === 'kg' ? 1000 : (u === 'mg' ? 0.001 : 1);
+        uG = val * mult;
       }
 
       return { nomG, mcG, uG, kelas: w.kelas || set.kelas };
     };
 
     const vals = getMasterValues(w);
-    const fieldNumber = currentLookupTarget.fieldNumber;
+    const index = currentLookupTarget.fieldNumber;
 
-    // Store the weight data with both nominal and Mc
-    if (fieldNumber === 1) {
-      manualInputWeights.weight1 = {
-        nominal: vals.nomG,
-        mc: vals.mcG,
-        u: vals.uG,
-        kelas: vals.kelas,
-        label: formatNumber(vals.nomG, 0) + ' g'
-      };
-      document.getElementById('manual-weight1-display').innerHTML =
-        '<span class="font-semibold text-indigo-700">' + manualInputWeights.weight1.label + '</span>';
-    } else {
-      manualInputWeights.weight2 = {
-        nominal: vals.nomG,
-        mc: vals.mcG,
-        u: vals.uG,
-        kelas: vals.kelas,
-        label: formatNumber(vals.nomG, 0) + ' g'
-      };
-      document.getElementById('manual-weight2-display').innerHTML =
-        '<span class="font-semibold text-indigo-700">' + manualInputWeights.weight2.label + '</span>';
-    }
+    // Store the weight data in the array
+    manualInputWeights[index] = {
+      nominal: vals.nomG,
+      mc: vals.mcG,
+      u: vals.uG,
+      kelas: vals.kelas,
+      label: formatNumber(vals.nomG, 0) + ' ' + g_currentUnit
+    };
 
-    // Auto-calculate if both weights are selected
-    if (manualInputWeights.weight1 && manualInputWeights.weight2) {
-      calculateManualResult();
-    }
+    // Recalculate and update UI
+    renderManualWeightRows();
+    calculateManualResult();
 
     closeMasterLookup();
 
@@ -6124,70 +6231,76 @@
   }
 
   function calculateManualResult() {
-    if (!manualInputWeights.weight1 || !manualInputWeights.weight2) {
+    const selectedWeights = manualInputWeights.filter(w => w !== null);
+    if (selectedWeights.length === 0) {
+      document.getElementById('manual-result-nominal').textContent = '-';
+      document.getElementById('manual-result-mc').textContent = '-';
+      document.getElementById('manual-result-mpe').textContent = '-';
+      document.getElementById('manual-submit-btn').disabled = true;
       return;
     }
 
-    // Calculate: Nominal1 + Nominal2
-    const nominalResult = manualInputWeights.weight1.nominal + manualInputWeights.weight2.nominal;
+    // Enable submit if at least 1 is selected
+    document.getElementById('manual-submit-btn').disabled = false;
 
-    // Calculate: Mc1 + Mc2
-    const mcResult = manualInputWeights.weight1.mc + manualInputWeights.weight2.mc;
+    // Calculate Sums
+    const nominalResult = selectedWeights.reduce((sum, w) => sum + w.nominal, 0);
+    const mcResult = selectedWeights.reduce((sum, w) => sum + w.mc, 0);
+    const uResult = selectedWeights.reduce((sum, w) => sum + (w.u || 0), 0);
 
-    // Determine decimal precision for Mc based on current unit
+    // Mc precision
     let mcDec = 9;
     if (g_currentUnit === 'g') mcDec = 6;
     else if (g_currentUnit === 'mg') mcDec = 3;
 
     // Display Nominal result
-    document.getElementById('manual-result-nominal').textContent = formatNumber(nominalResult, 0) + ' g';
+    document.getElementById('manual-result-nominal').textContent = formatNumber(nominalResult, 0) + ' ' + g_currentUnit;
     document.getElementById('manual-formula-nominal').textContent =
-      manualInputWeights.weight1.label + ' + ' + manualInputWeights.weight2.label + ' = ' + formatNumber(nominalResult, 0) + ' g';
+      selectedWeights.map(w => w.label).join(' + ') + ' = ' + formatNumber(nominalResult, 0) + ' ' + g_currentUnit;
 
     // Display Mc result
-    document.getElementById('manual-result-mc').textContent = formatNumber(mcResult, mcDec) + ' g';
+    document.getElementById('manual-result-mc').textContent = formatNumber(mcResult, mcDec) + ' ' + g_currentUnit;
     document.getElementById('manual-formula-mc').textContent =
-      formatNumber(manualInputWeights.weight1.mc, mcDec) + ' g + ' +
-      formatNumber(manualInputWeights.weight2.mc, mcDec) + ' g = ' +
-      formatNumber(mcResult, mcDec) + ' g';
+      selectedWeights.map(w => formatNumber(w.mc, mcDec) + ' ' + g_currentUnit).join(' + ') + ' = ' +
+      formatNumber(mcResult, mcDec) + ' ' + g_currentUnit;
 
-    // New: Handle Uncertainty Summation
-    const uResult = manualInputWeights.weight1.u + manualInputWeights.weight2.u;
+    // Uncertainty Summation
     const uLabel = document.getElementById('manual-result-u');
     const uFormula = document.getElementById('manual-formula-u');
     if (uLabel && uFormula) {
-      uLabel.textContent = formatNumber(uResult, 9) + ' g';
-      uFormula.textContent = formatNumber(manualInputWeights.weight1.u, 9) + ' g + ' +
-        formatNumber(manualInputWeights.weight2.u, 9) + ' g = ' +
-        formatNumber(uResult, 9) + ' g';
+      uLabel.textContent = formatNumber(uResult, 9) + ' ' + g_currentUnit;
+      uFormula.textContent = selectedWeights.map(w => formatNumber(w.u || 0, 9) + ' ' + g_currentUnit).join(' + ') + ' = ' +
+        formatNumber(uResult, 9) + ' ' + g_currentUnit;
     }
 
-    // New: Handle MPE Summation with adaptive units (OIML R-111 style)
+    // Handle MPE Summation
     const formatMPEValue = (valMg) => {
       if (valMg >= 1000000) return (valMg / 1000000).toLocaleString('id-ID') + ' kg';
       if (valMg >= 1000) return (valMg / 1000).toLocaleString('id-ID') + ' g';
       return valMg.toLocaleString('id-ID') + ' mg';
     };
 
-    const mpe1 = getMPEWithBreakdown(manualInputWeights.weight1.nominal, manualInputWeights.weight1.kelas || "F1");
-    const mpe2 = getMPEWithBreakdown(manualInputWeights.weight2.nominal, manualInputWeights.weight2.kelas || "F1");
-    const mpeTotal = mpe1 + mpe2;
+    let totalMpeMg = 0;
+    const mpeFormulas = [];
+    selectedWeights.forEach(w => {
+      const cls = w.kelas || "F1";
+      const mpeMg = getMPEWithBreakdown(w.nominal, cls);
+      totalMpeMg += mpeMg;
+      mpeFormulas.push(`${formatMPEValue(mpeMg)} (${cls})`);
+    });
+
     const mpeLabel = document.getElementById('manual-result-mpe');
     const mpeFormula = document.getElementById('manual-formula-mpe');
     if (mpeLabel && mpeFormula) {
-      mpeLabel.textContent = formatMPEValue(mpeTotal);
-      const cls1 = manualInputWeights.weight1.kelas || "F1";
-      const cls2 = manualInputWeights.weight2.kelas || "F1";
-      mpeFormula.textContent = `${formatMPEValue(mpe1)} (${cls1}) + ${formatMPEValue(mpe2)} (${cls2}) = ${formatMPEValue(mpeTotal)}`;
+      mpeLabel.textContent = formatMPEValue(totalMpeMg);
+      mpeFormula.textContent = mpeFormulas.join(' + ') + ' = ' + formatMPEValue(totalMpeMg);
     }
-
-    // Enable submit button
-    document.getElementById('manual-submit-btn').disabled = false;
   }
 
   function submitManualInput() {
-    if (!manualInputWeights.weight1 || !manualInputWeights.weight2) {
-      alert('Silakan pilih kedua batu timbang terlebih dahulu');
+    const selectedWeights = manualInputWeights.filter(w => w !== null);
+    if (selectedWeights.length === 0) {
+      alert('Silakan pilih setidaknya satu batu timbang terlebih dahulu');
       return;
     }
 
@@ -6202,22 +6315,32 @@
       return;
     }
 
-    // Calculate combined values
-    const nominalResultG = manualInputWeights.weight1.nominal + manualInputWeights.weight2.nominal;
-    const mcResultG = manualInputWeights.weight1.mc + manualInputWeights.weight2.mc;
-    const uResultG = manualInputWeights.weight1.u + manualInputWeights.weight2.u;
+    // Calculate combined values (Sum of all selected weights)
+    const nominalResultG = selectedWeights.reduce((sum, w) => sum + w.nominal, 0);
+    const mcResultG = selectedWeights.reduce((sum, w) => sum + w.mc, 0);
+    const uResultG = selectedWeights.reduce((sum, w) => sum + (w.u || 0), 0);
+
+    // Sum MPEs for calculation of U1 and U4
+    let totalMpeMg = 0;
+    selectedWeights.forEach(w => {
+      totalMpeMg += getMPEWithBreakdown(w.nominal, w.kelas || "F1");
+    });
 
     // Get table cells (assuming column structure: No, Nominal, Mc, ...)
     const nomCell = tr.cells[1]; // Column 2: Nominal Batu Timbang
     const mcCell = tr.cells[2];  // Column 3: Massa Konvensional
 
-    // Update Nominal cell
-    const nomSpan = nomCell.querySelector('span.no-decimal');
-    if (nomSpan) {
-      nomSpan.dataset.baseWeight = nominalResultG;
-    } else {
-      nomCell.dataset.baseWeight = nominalResultG;
-      nomCell.classList.add('no-decimal');
+    // Update Nominal cell (Target only the span to preserve buttons)
+    if (nomCell) {
+      const nomSpan = nomCell.querySelector('span.no-decimal');
+      if (nomSpan) {
+        nomSpan.dataset.baseWeight = nominalResultG;
+        nomSpan.textContent = formatNumber(nominalResultG, 0);
+      } else {
+        // Fallback if structure is different
+        nomCell.dataset.baseWeight = nominalResultG;
+        nomCell.innerHTML = `<span class="no-decimal" data-base-weight="${nominalResultG}">${formatNumber(nominalResultG, 0)}</span>`;
+      }
     }
 
     // Update Mc cell
@@ -6225,34 +6348,31 @@
     if (g_currentUnit === 'g') mcDec = 6;
     else if (g_currentUnit === 'mg') mcDec = 3;
 
-    const mcFormatted = formatNumber(mcResultG, mcDec);
-    mcCell.dataset.baseWeight = mcResultG;
-    mcCell.classList.add('mc-cell');
-    mcCell.innerText = mcFormatted;
-
-    // New: Store uncertainty and MPE for U1 and U4 calculation
-    tr.dataset.certU = uResultG;
-
-    const mpe1 = getMPEWithBreakdown(manualInputWeights.weight1.nominal, manualInputWeights.weight1.kelas || "F1");
-    const mpe2 = getMPEWithBreakdown(manualInputWeights.weight2.nominal, manualInputWeights.weight2.kelas || "F1");
-    tr.dataset.certMpe = mpe1 + mpe2;
-
-    // Capture class for U4 calculation
-    // If weights have different classes, we'll take the first one (most likely same)
-    if (manualInputWeights.weight1.kelas) {
-      tr.dataset.certKelas = manualInputWeights.weight1.kelas;
+    if (mcCell) {
+      mcCell.dataset.baseWeight = mcResultG;
+      mcCell.classList.add('mc-cell');
+      mcCell.innerText = formatNumber(mcResultG, mcDec);
     }
 
-    // Refresh display to respect current unit
+    // Store uncertainty and total MPE for future calculations (Uncertainty Table)
+    tr.dataset.certU = uResultG;
+    tr.dataset.certMpe = totalMpeMg;
+
+    // Capture class for U4 calculation (prefer first selected weight's class)
+    if (selectedWeights[0].kelas) {
+      tr.dataset.certKelas = selectedWeights[0].kelas;
+    }
+
+    // Refresh display and labels
     refreshStaticWeights();
 
-    // Trigger recalculation if there's input in the row
+    // Trigger recalculation in the row
     const firstInput = tr.querySelector('input:not([readonly])');
     if (firstInput) firstInput.dispatchEvent(new Event('input', { bubbles: true }));
 
     // Close modal and notify user
     closeManualInputModal();
-    alert('Nilai berhasil dimasukkan ke baris ' + manualInputTargetRow);
+    alert('Nilai gabungan (' + selectedWeights.length + ' batu) berhasil dimasukkan ke baris ' + manualInputTargetRow);
   }
 
   // --- EXPORT CONFIRMATION & RESET LOGIC ---
